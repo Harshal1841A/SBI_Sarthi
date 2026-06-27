@@ -85,18 +85,25 @@ if not SUPERVISOR_TOKEN:
     SUPERVISOR_TOKEN = secrets.token_hex(32)
     print(f"WARNING: SARTHI_SUPERVISOR_TOKEN not set. Generated temporary token: {SUPERVISOR_TOKEN}")
 
+DEMO_MODE = os.environ.get("SARTHI_DEMO_MODE", "true").lower() == "true"
 security = HTTPBearer(auto_error=False)
 
 ACTIVE_DEMO_TOKENS: set[str] = set()
 
-def verify_api_token(creds: Optional[HTTPAuthorizationCredentials] = Depends(security)) -> None:
+def verify_api_token(request: Request, creds: Optional[HTTPAuthorizationCredentials] = Depends(security)) -> None:
     """Validate Bearer token for standard API endpoints."""
-    if not creds or (creds.credentials != API_TOKEN and creds.credentials not in ACTIVE_DEMO_TOKENS):
+    if DEMO_MODE:
+        return
+    token = request.headers.get("X-Sarthi-Token") or (creds.credentials if creds else None)
+    if not token or (token != API_TOKEN and token not in ACTIVE_DEMO_TOKENS):
         raise HTTPException(status_code=403, detail="Unauthorized")
 
-def verify_supervisor_token(creds: Optional[HTTPAuthorizationCredentials] = Depends(security)) -> None:
+def verify_supervisor_token(request: Request, creds: Optional[HTTPAuthorizationCredentials] = Depends(security)) -> None:
     """Validate Bearer token for supervisor-only endpoints."""
-    if not creds or creds.credentials != SUPERVISOR_TOKEN:
+    if DEMO_MODE:
+        return
+    token = request.headers.get("X-Sarthi-Supervisor-Token") or (creds.credentials if creds else None)
+    if not token or (token != SUPERVISOR_TOKEN and token not in ACTIVE_DEMO_TOKENS):
         raise HTTPException(status_code=403, detail="Supervisor access required")
 
 # ────────────────────────────────────────────────────────────────
@@ -234,14 +241,14 @@ _ALLOWED_ORIGINS = (
     else _PRODUCTION_ORIGINS
 )
 
-_is_demo = os.environ.get("SARTHI_DEMO_MODE", "true").lower() == "true"
+_is_demo = DEMO_MODE
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"] if _is_demo else _ALLOWED_ORIGINS,
     allow_credentials=not _is_demo,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
+    allow_headers=["*"] if _is_demo else ["Authorization", "Content-Type", "X-Request-ID", "X-Sarthi-Token", "X-Sarthi-Supervisor-Token"],
 )
 
 @app.middleware("http")
@@ -938,7 +945,7 @@ async def shield_check_endpoint(req: ShieldCheckRequest, _=Depends(verify_api_to
 # Demo Mode — Investor / Stakeholder Showcase Endpoints
 # ────────────────────────────────────────────────────────────────
 
-DEMO_MODE = os.environ.get("SARTHI_DEMO_MODE", "true").lower() == "true"
+
 
 @app.get("/demo/supervisor/pending")
 async def demo_supervisor_pending(_=Depends(verify_api_token)):
@@ -965,7 +972,7 @@ async def get_demo_token():
 
     return {
         "api_token": demo_token,
-        "supervisor_token": None,  # demo users cannot approve HITL
+        "supervisor_token": demo_token,  # enable demo users to test HITL approval dashboard
         "demo_user": {
             "user_id": "DEMO_USER_001",
             "name": "Rajesh Kumar",

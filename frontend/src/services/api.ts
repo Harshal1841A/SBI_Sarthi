@@ -30,8 +30,13 @@ const api = axios.create({
 
 api.interceptors.request.use((config) => {
   const token = getToken();
+  const supervisorToken = getSupervisorToken();
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
+    config.headers['X-Sarthi-Token'] = token;
+  }
+  if (supervisorToken) {
+    config.headers['X-Sarthi-Supervisor-Token'] = supervisorToken;
   }
   return config;
 });
