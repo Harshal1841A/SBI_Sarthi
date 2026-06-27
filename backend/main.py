@@ -18,7 +18,9 @@ from datetime import datetime
 from typing import Optional, List, Dict, Any
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, APIRouter, WebSocket, WebSocketDisconnect, HTTPException, Depends, UploadFile, File, Form
+from fastapi import FastAPI, APIRouter, WebSocket, WebSocketDisconnect, HTTPException, Depends, UploadFile, File, Form, Request
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -176,7 +178,7 @@ async def lifespan(app: FastAPI):
     print("Sarthi API starting up...")
     
     # Initialize Databases
-            try:
+    try:
         await postgres_db.connect()
         await redis_cache.connect()
     except Exception as e:
@@ -197,7 +199,7 @@ async def lifespan(app: FastAPI):
     # Shutdown
     print("Sarthi API shutting down...")
     
-            await postgres_db.disconnect()
+    await postgres_db.disconnect()
     await redis_cache.disconnect()
     
     cleanup_stats = clear_cache()
@@ -232,13 +234,21 @@ _ALLOWED_ORIGINS = (
     else _PRODUCTION_ORIGINS
 )
 
+_is_demo = os.environ.get("SARTHI_DEMO_MODE", "true").lower() == "true"
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_ALLOWED_ORIGINS,
-    allow_credentials=True,
+    allow_origins=["*"] if _is_demo else _ALLOWED_ORIGINS,
+    allow_credentials=not _is_demo,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
 )
+
+@app.middleware("http")
+async def strip_api_prefix(request: Request, call_next):
+    if request.url.path.startswith("/api/"):
+        request.scope["path"] = request.url.path[4:]
+    return await call_next(request)
 
 # Rate Limiting Middleware
 app.add_middleware(RateLimitMiddleware, rate_limit=100, window=60)
@@ -295,7 +305,7 @@ async def health_check():
     
     # Postgres
     try:
-                if postgres_db.pool:
+        if postgres_db.pool:
             services["postgres"] = "up"
         else:
             services["postgres"] = "down: not connected"
@@ -304,7 +314,7 @@ async def health_check():
     
     # Redis
     try:
-                if redis_cache.client and await redis_cache.client.ping():
+        if redis_cache.client and await redis_cache.client.ping():
             services["redis"] = "up"
         else:
             services["redis"] = "down: not connected"
@@ -1044,8 +1054,28 @@ async def create_loan_endpoint(
     return sbi_api.create_loan(req.user_id, req.amount, req.purpose)
 
 # ────────────────────────────────────────────────────────────────
-# Main
+# Main & Static Hosting
 # ────────────────────────────────────────────────────────────────
+
+app.include_router(api_router)
+app.include_router(api_router, prefix="/api")
+
+# Serve Frontend Static Files (SPA)
+_FRONTEND_DIST = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "frontend", "dist")
+if os.path.exists(_FRONTEND_DIST):
+    _ASSETS_DIR = os.path.join(_FRONTEND_DIST, "assets")
+    if os.path.exists(_ASSETS_DIR):
+        app.mount("/assets", StaticFiles(directory=_ASSETS_DIR), name="assets")
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def serve_spa(full_path: str):
+        file_path = os.path.join(_FRONTEND_DIST, full_path)
+        if os.path.isfile(file_path):
+            return FileResponse(file_path)
+        index_path = os.path.join(_FRONTEND_DIST, "index.html")
+        if os.path.isfile(index_path):
+            return FileResponse(index_path)
+        raise HTTPException(status_code=404, detail="Frontend not found")
 
 if __name__ == "__main__":
     import uvicorn
@@ -1057,5 +1087,3 @@ if __name__ == "__main__":
         workers=4,
         reload=False
     )
-
-app.include_router(api_router)
