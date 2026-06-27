@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  api:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      - SARTHI_ENV=production
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - NIM_API_KEY=${NIM_API_KEY}
+      - BHASHINI_API_KEY=${BHASHINI_API_KEY}
+      - SARTHI_HMAC_SECRET=${SARTHI_HMAC_SECRET}
+      - SARTHI_API_TOKEN=${SARTHI_API_TOKEN}
+      - SARTHI_SUPERVISOR_TOKEN=${SARTHI_SUPERVISOR_TOKEN}
+      - SQLITE_PATH=/data/checkpoints.db
+    volumes:
+      - ./data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    # FIX#6: 4 workers for concurrent WebSocket sessions
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --workers 4
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'

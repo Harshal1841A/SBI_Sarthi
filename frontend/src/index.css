@@ -1,0 +1,144 @@
+/* ── Google Fonts — MUST be first in file ────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Outfit:wght@600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── CSS Custom Properties ──────────────────────────────────── */
+:root {
+  --bg:            #f4f6fc;
+  --bg-dark:       #0a0f1e;
+  --surface-dark:  #0f1928;
+  --teal:          #14B8A6;
+}
+
+/* ── Base reset ─────────────────────────────────────────────── */
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    @apply bg-background text-on-surface font-body-md min-h-screen;
+    background-color: var(--bg);
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+
+  /* Dark mode — explicit overrides for full-page background */
+  .dark body {
+    background-color: var(--bg-dark) !important;
+    color: #e4eafc;
+  }
+
+  .dark {
+    color-scheme: dark;
+  }
+
+  /* Material Symbols icon font */
+  .material-symbols-outlined {
+    font-family: 'Material Symbols Outlined';
+    font-weight: normal;
+    font-style: normal;
+    font-size: 24px;
+    line-height: 1;
+    letter-spacing: normal;
+    text-transform: none;
+    display: inline-block;
+    white-space: nowrap;
+    word-wrap: normal;
+    direction: ltr;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    -moz-osx-font-smoothing: grayscale;
+    font-feature-settings: 'liga';
+    user-select: none;
+  }
+}
+
+/* ── Component utilities ───────────────────────────────────── */
+@layer utilities {
+  /* Glassmorphism */
+  .glass {
+    backdrop-filter: blur(16px) saturate(180%);
+    -webkit-backdrop-filter: blur(16px) saturate(180%);
+  }
+
+  /* Waveform bars */
+  .waveform-bar {
+    width: 3px;
+    border-radius: 2px;
+    animation: waveformAnim 1.2s ease-in-out infinite;
+  }
+
+  /* Orb glow */
+  .orb-glow {
+    animation: orbPulseAnim 2s ease-in-out infinite;
+  }
+
+  /* Fade-in utility */
+  .animate-fade-in {
+    animation: fadeInAnim 0.2s ease-out both;
+  }
+
+  /* Slide-up utility */
+  .animate-slide-up {
+    animation: slideUpAnim 0.3s ease-out both;
+  }
+}
+
+/* ── Keyframes ──────────────────────────────────────────────── */
+@keyframes waveformAnim {
+  0%, 100% { height: 6px;  }
+  50%       { height: 20px; }
+}
+
+@keyframes orbPulseAnim {
+  0%, 100% { opacity: 0.25; transform: scale(1);    }
+  50%       { opacity: 0.55; transform: scale(1.15); }
+}
+
+@keyframes fadeInAnim {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0);   }
+}
+
+@keyframes slideUpAnim {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0);    }
+}
+
+/* ── Dark-mode surface overrides ────────────────────────────── */
+.dark .bg-surface\/80,
+.dark .bg-surface-dim\/80 {
+  background-color: rgba(15, 25, 40, 0.9) !important;
+}
+
+.dark .bg-surface-container-low\/50,
+.dark .bg-surface-container\/50 {
+  background-color: rgba(19, 31, 53, 0.85) !important;
+}
+
+.dark .bg-surface-container-lowest\/90,
+.dark .bg-surface-container-high\/90 {
+  background-color: rgba(10, 15, 30, 0.95) !important;
+}
+
+/* Dark text overrides */
+.dark .text-on-surface-variant {
+  color: #b0bcd6 !important;
+}
+
+.dark .text-outline-variant {
+  color: #8a9ab8 !important;
+}
+
+.dark .text-primary {
+  color: #a3c9ff !important;
+}
+
+.dark .text-on-surface {
+  color: #e4eafc !important;
+}
