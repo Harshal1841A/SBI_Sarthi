@@ -1,3 +1,4 @@
+import time
 from typing import Any
 from state import SarthiState
 from security.audit import create_audit_artifact
@@ -9,7 +10,7 @@ from security.audit import create_audit_artifact
 # ────────────────────────────────────────────────────────────────
 
 
-def hitl_pause_node(state: SarthiState) -> dict:
+async def hitl_pause_node(state: SarthiState) -> dict:
     """HITL Pause Node: interrupt graph execution, checkpoint state, notify dashboard.
     
     When the graph reaches this node, execution HALTS. The thread enters
@@ -44,12 +45,12 @@ def hitl_pause_node(state: SarthiState) -> dict:
         "interrupted": True,
         "interrupt_reason": interrupt_reason,
         "requires_hitl": True,
-        "hitl_timestamp": __import__('time').time(),
-        "status": "RUNNING"
+        "hitl_timestamp": time.time(),
+        "status": "INTERRUPTED"
     }
 
 
-def hitl_resume_node(state: SarthiState) -> dict:
+async def hitl_resume_node(state: SarthiState) -> dict:
     """HITL Resume Node: graph resumes after human approval.
     
     This node is triggered by:

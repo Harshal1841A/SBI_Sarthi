@@ -26,12 +26,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST
 from starlette.responses import Response
+import structlog
+
+logger = structlog.get_logger("main")
 
 # Local imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from state import SarthiState
 from graph import get_graph
 from security.pii_scrubber import scrub_pii, detect_pii
+from security.pii_middleware import PIIIngressMiddleware
 from security.verhoeff import validate_aadhaar, validate_pan, AadhaarValidationError
 from security.consent import (
     create_consent_artifact, store_consent_artifact, get_last_consent_hash,
@@ -46,12 +50,11 @@ from integrations.sbi_mock import sbi_api
 from integrations.yono_mock import yono_api
 from integrations.kyc_mock import kyc_api
 from utils.cache import get_cache_stats, clear_cache, pre_cache_demo_interactions
+from utils.connections import postgres_db, redis_cache
 from channels.whatsapp import whatsapp_router
 from channels.ivr import ivr_router
 from middleware.rate_limiter import RateLimitMiddleware
 from utils.feature_flags import feature_flags
-import structlog
-import logging
 
 # Configure structlog
 structlog.configure(
@@ -67,44 +70,91 @@ structlog.configure(
 # Environment Configuration
 # ────────────────────────────────────────────────────────────────
 
-# FIX M-1: Single authoritative token initialisation — removed duplicate block.
-# Load from environment; generate ephemeral tokens if missing (dev only).
 API_TOKEN        = os.environ.get("SARTHI_API_TOKEN", "")
 SUPERVISOR_TOKEN = os.environ.get("SARTHI_SUPERVISOR_TOKEN", "")
 HMAC_SECRET      = os.environ.get("SARTHI_HMAC_SECRET", "")
 
 if not API_TOKEN:
-    # Also accept frontend env-var name for zero-config demo startup
     API_TOKEN = os.environ.get("VITE_SARTHI_TOKEN", "") or os.environ.get("VITE_SARTHI_API_TOKEN", "")
 
 if not API_TOKEN:
     API_TOKEN = secrets.token_hex(32)
-    print(f"WARNING: SARTHI_API_TOKEN not set. Generated temporary token: {API_TOKEN}")
+    logger.warning("SARTHI_API_TOKEN not set. Generated temporary token")
 
 if not SUPERVISOR_TOKEN:
     SUPERVISOR_TOKEN = secrets.token_hex(32)
-    print(f"WARNING: SARTHI_SUPERVISOR_TOKEN not set. Generated temporary token: {SUPERVISOR_TOKEN}")
+    logger.warning("SARTHI_SUPERVISOR_TOKEN not set. Generated temporary token")
 
-DEMO_MODE = os.environ.get("SARTHI_DEMO_MODE", "true").lower() == "true"
+SARTHI_ENV = os.environ.get("SARTHI_ENV", "development").lower()
+DEMO_MODE = (
+    os.environ.get("SARTHI_DEMO_MODE", "false").lower() == "true"
+    and SARTHI_ENV in {"development", "demo"}
+)
 security = HTTPBearer(auto_error=False)
 
-ACTIVE_DEMO_TOKENS: set[str] = set()
+ACTIVE_DEMO_TOKENS: dict[str, float] = {}
+
+def _is_valid_demo_token(token: str) -> bool:
+    if token not in ACTIVE_DEMO_TOKENS:
+        return False
+    if time.time() > ACTIVE_DEMO_TOKENS[token]:
+        del ACTIVE_DEMO_TOKENS[token]
+        return False
+    return True
 
 def verify_api_token(request: Request, creds: Optional[HTTPAuthorizationCredentials] = Depends(security)) -> None:
     """Validate Bearer token for standard API endpoints."""
-    if DEMO_MODE:
-        return
     token = request.headers.get("X-Sarthi-Token") or (creds.credentials if creds else None)
-    if not token or (token != API_TOKEN and token not in ACTIVE_DEMO_TOKENS):
+    if not token or (token != API_TOKEN and not _is_valid_demo_token(token)):
         raise HTTPException(status_code=403, detail="Unauthorized")
 
 def verify_supervisor_token(request: Request, creds: Optional[HTTPAuthorizationCredentials] = Depends(security)) -> None:
     """Validate Bearer token for supervisor-only endpoints."""
-    if DEMO_MODE:
-        return
     token = request.headers.get("X-Sarthi-Supervisor-Token") or (creds.credentials if creds else None)
-    if not token or (token != SUPERVISOR_TOKEN and token not in ACTIVE_DEMO_TOKENS):
+    if not token or (token != SUPERVISOR_TOKEN and not _is_valid_demo_token(token)):
         raise HTTPException(status_code=403, detail="Supervisor access required")
+
+
+async def authenticate_websocket(websocket: WebSocket, expected_token: Optional[str] = None) -> bool:
+    """Authenticate a WebSocket connection using first-frame auth or optional query token."""
+    if expected_token is None:
+        expected_token = API_TOKEN
+
+    allow_query = os.environ.get("SARTHI_ALLOW_QUERY_TOKEN", "false").lower() == "true"
+    query_token = websocket.query_params.get("token")
+
+    if query_token:
+        if not allow_query:
+            await websocket.accept()
+            await websocket.close(code=4001, reason="Query token auth disabled")
+            return False
+        if query_token != expected_token and not _is_valid_demo_token(query_token):
+            await websocket.accept()
+            await websocket.close(code=4001, reason="Unauthorized query token")
+            return False
+        await websocket.accept()
+        return True
+
+    await websocket.accept()
+    try:
+        async with asyncio.timeout(3.0):
+            data = await websocket.receive_json()
+            if not isinstance(data, dict) or data.get("type") != "auth":
+                await websocket.close(code=4001, reason="Invalid auth frame")
+                return False
+            token = data.get("token")
+            if not token or (token != expected_token and not _is_valid_demo_token(token)):
+                await websocket.close(code=4001, reason="Invalid token")
+                return False
+    except (asyncio.TimeoutError, Exception) as e:
+        logger.warning("websocket_auth_failed", error=str(e))
+        try:
+            await websocket.close(code=4001, reason="Auth failed")
+        except Exception:
+            pass
+        return False
+
+    return True
 
 # ────────────────────────────────────────────────────────────────
 # Prometheus Metrics
@@ -181,36 +231,50 @@ class LoanRequest(BaseModel):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan: startup and shutdown."""
-    # Startup
-    print("Sarthi API starting up...")
+    if SARTHI_ENV == "production":
+        for name, val in [
+            ("SARTHI_API_TOKEN", os.environ.get("SARTHI_API_TOKEN", "")),
+            ("SARTHI_SUPERVISOR_TOKEN", os.environ.get("SARTHI_SUPERVISOR_TOKEN", "")),
+            ("SARTHI_HMAC_SECRET", os.environ.get("SARTHI_HMAC_SECRET", "")),
+        ]:
+            if not val or len(val) < 64 or val.startswith("CHANGE_ME") or val.startswith("GENERATE_ME") or val == "0" * 64:
+                raise RuntimeError(f"{name} required and must be at least 64 hex chars in production")
+    else:
+        logger.info(f"=== SARTHI BOOT BANNER: env={SARTHI_ENV} demo_mode={DEMO_MODE} ===")
+
+    logger.info("Sarthi API starting up...")
     
-    # Initialize Databases
     try:
         await postgres_db.connect()
         await redis_cache.connect()
     except Exception as e:
-        print(f"! Database connection failed (running in degraded mode): {e}")
+        logger.warning(f"Database connection failed (running in degraded mode): {e}")
         
     pre_cache_demo_interactions()
     
-    # Verify graph compilation
     try:
         graph = get_graph()
-        print(f"[OK] LangGraph compiled successfully: {type(graph)}")
+        if hasattr(graph.checkpointer, "setup"):
+            try:
+                await graph.checkpointer.setup()
+            except Exception as e:
+                if SARTHI_ENV == "production":
+                    raise
+                logger.warning(f"Checkpointer setup failed (degraded mode): {e}")
+        logger.info(f"LangGraph compiled successfully: {type(graph)}")
     except Exception as e:
-        print(f"[ERROR] Graph compilation failed: {e}")
+        logger.error(f"Graph compilation failed: {e}")
         raise
     
     yield
     
-    # Shutdown
-    print("Sarthi API shutting down...")
+    logger.info("Sarthi API shutting down...")
     
     await postgres_db.disconnect()
     await redis_cache.disconnect()
     
     cleanup_stats = clear_cache()
-    print(f"Cache cleanup: {cleanup_stats}")
+    logger.info(f"Cache cleanup: {cleanup_stats}")
 
 # ────────────────────────────────────────────────────────────────
 # FastAPI App
@@ -235,27 +299,19 @@ _DEV_ORIGINS = [
     "http://127.0.0.1:3000",
     "http://127.0.0.1:5173",
 ]
-_ALLOWED_ORIGINS = (
-    _PRODUCTION_ORIGINS + _DEV_ORIGINS
-    if os.environ.get("SARTHI_ENV", "development") != "production"
-    else _PRODUCTION_ORIGINS
-)
-
-_is_demo = DEMO_MODE
+_ALLOWED_ORIGINS = _PRODUCTION_ORIGINS + _DEV_ORIGINS
+_is_prod = os.environ.get("SARTHI_ENV", "development").lower() == "production"
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"] if _is_demo else _ALLOWED_ORIGINS,
-    allow_credentials=not _is_demo,
+    allow_origins=_PRODUCTION_ORIGINS if _is_prod else _ALLOWED_ORIGINS,
+    allow_origin_regex=None if _is_prod else r"http://(localhost|127\.0\.0\.1)(:\d+)?",
+    allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["*"] if _is_demo else ["Authorization", "Content-Type", "X-Request-ID", "X-Sarthi-Token", "X-Sarthi-Supervisor-Token"],
+    allow_headers=["*"] if not _is_prod else ["Authorization", "Content-Type", "X-Request-ID", "X-Sarthi-Token", "X-Sarthi-Supervisor-Token"],
 )
+app.add_middleware(PIIIngressMiddleware)
 
-@app.middleware("http")
-async def strip_api_prefix(request: Request, call_next):
-    if request.url.path.startswith("/api/"):
-        request.scope["path"] = request.url.path[4:]
-    return await call_next(request)
 
 # Rate Limiting Middleware
 app.add_middleware(RateLimitMiddleware, rate_limit=100, window=60)
@@ -349,43 +405,86 @@ async def get_stats():
     return {
         "version": "2.0.0",
         "active_sessions": len(session_buffers),
-        "hitl_pending": len(get_interrupted_threads()),
+        "hitl_pending": len(await get_interrupted_threads()),
         "cache": get_cache_stats(),
         "audit": get_audit_stats()
     }
 
 # ────────────────────────────────────────────────────────────────
-# Voice WebSocket
+# WebSockets
 # ────────────────────────────────────────────────────────────────
 
-@app.websocket("/ws/voice")
-async def voice_websocket(websocket: WebSocket):
-    """WebSocket endpoint for voice conversations.
-    
-    Protocol:
-    1. Client connects with ?token=<API_TOKEN>
-    2. Server accepts, assigns session_id
-    3. Client sends Int16 PCM chunks (160 samples = 10ms at 16kHz)
-    4. Server accumulates, runs VAD, sends back audio when ready
-    """
-    # FIX#7: WebSocket auth via query param
-    token = websocket.query_params.get("token")
-    if not token or token != API_TOKEN:
-        await websocket.close(code=4003, reason="Unauthorized")
+@app.websocket("/ws/chat/{user_id}")
+async def chat_websocket(websocket: WebSocket, user_id: str) -> None:
+    """WebSocket endpoint for real-time chat updates."""
+    if not await authenticate_websocket(websocket):
         return
-    
-    await websocket.accept()
+    graph = get_graph()
+    try:
+        while True:
+            raw = await websocket.receive_text()
+            try:
+                data = json.loads(raw)
+                msg_text = data.get("message", raw)
+                session_id = data.get("session_id", f"ws_{user_id}")
+                language = data.get("language", "en")
+            except Exception:
+                msg_text = raw
+                session_id = f"ws_{user_id}"
+                language = "en"
+                
+            result = await graph.ainvoke(
+                {
+                    "messages": [{"role": "user", "content": msg_text}],
+                    "session_id": session_id,
+                    "user_id": user_id,
+                    "language": language,
+                    "channel": "chat"
+                },
+                config={"configurable": {"thread_id": session_id}}
+            )
+            await websocket.send_json({
+                "response": result.get("response_text", ""),
+                "intent": result.get("current_intent", "general_chat"),
+                "confidence": result.get("confidence_score", 0.0),
+                "requires_hitl": result.get("interrupted", False),
+                "language": language
+            })
+    except WebSocketDisconnect:
+        pass
+
+
+@app.websocket("/ws/supervisor")
+async def supervisor_websocket(websocket: WebSocket) -> None:
+    """WebSocket endpoint for real-time supervisor metrics."""
+    expected = SUPERVISOR_TOKEN if SUPERVISOR_TOKEN else API_TOKEN
+    if not await authenticate_websocket(websocket, expected_token=expected):
+        return
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        pass
+
+
+@app.websocket("/ws/voice")
+async def voice_websocket(websocket: WebSocket) -> None:
+    """WebSocket endpoint for voice conversations."""
+    if not await authenticate_websocket(websocket):
+        return
     session_id = str(uuid.uuid4())
+    session_lang = websocket.query_params.get("lang", "en")
     
     # FIX#5: Init per-session buffer
     ACTIVE_SESSIONS.inc()
     
     try:
         # Send welcome
+        welcome_msg = "Namaste. Main Sarthi hoon. Boliye." if session_lang == "hi" else "Hello. I am Sarthi. How can I help you?"
         await websocket.send_json({
             "type": "session_init",
             "session_id": session_id,
-            "message": "Namaste. Main Sarthi hoon. Boliye."
+            "message": welcome_msg
         })
         
         while True:
@@ -398,17 +497,16 @@ async def voice_websocket(websocket: WebSocket):
                 if "bytes" in data:
                     pcm_bytes = data["bytes"]
                     
-                    # Process audio chunk
-                    result = await process_audio_chunk(session_id, pcm_bytes)
+                    # Process audio chunk with session language
+                    result = await process_audio_chunk(session_id, pcm_bytes, language=session_lang)
                     
                     if result is None:
                         continue  # Buffer accumulating
                     
                     if result.get("needs_repeat"):
                         # ASR confidence too low — ask user to repeat
-                        repeat_audio = await tts_cascade(
-                            "Ek baar phir bolein, main sun raha hoon", "hi"
-                        )
+                        repeat_txt = "Ek baar phir bolein, main sun raha hoon" if session_lang == "hi" else "Please repeat that, I am listening."
+                        repeat_audio = await tts_cascade(repeat_txt, session_lang)
                         await websocket.send_bytes(repeat_audio)
                         continue
                     
@@ -417,11 +515,11 @@ async def voice_websocket(websocket: WebSocket):
                     scrubbed = scrub_pii(transcribed_text)
                     
                     graph = get_graph()
-                    graph_result = await asyncio.to_thread(graph.invoke,
+                    graph_result = await graph.ainvoke(
                         {
                             "messages": [{"role": "user", "content": scrubbed}],
                             "session_id": session_id,
-                            "language": "hi",
+                            "language": session_lang,
                             "channel": "voice"
                         },
                         config={"configurable": {"thread_id": session_id}}
@@ -430,7 +528,7 @@ async def voice_websocket(websocket: WebSocket):
                     response_text = graph_result.get("response_text", "")
                     
                     # Convert to speech
-                    audio_response = await tts_cascade(response_text, "hi")
+                    audio_response = await tts_cascade(response_text, session_lang)
                     
                     # Send back
                     await websocket.send_bytes(audio_response)
@@ -454,21 +552,21 @@ async def voice_websocket(websocket: WebSocket):
                         except json.JSONDecodeError:
                             text_content = msg_data
 
-                        lang = msg_json.get("language", "hi")
+                        session_lang = msg_json.get("language", session_lang)
                         scrubbed = scrub_pii(text_content)
                         graph = get_graph()
-                        graph_result = await asyncio.to_thread(graph.invoke,
+                        graph_result = await graph.ainvoke(
                             {
                                 "messages": [{"role": "user", "content": scrubbed}],
                                 "session_id": session_id,
-                                "language": lang,
+                                "language": session_lang,
                                 "channel": "voice"
                             },
                             config={"configurable": {"thread_id": session_id}}
                         )
 
                         response_text = graph_result.get("response_text", "")
-                        audio_response = await tts_cascade(response_text, lang)
+                        audio_response = await tts_cascade(response_text, session_lang)
                         await websocket.send_bytes(audio_response)
 
                         await websocket.send_json({
@@ -518,7 +616,7 @@ async def process_chat_message(msg: ChatMessage):
     graph = get_graph()
     
     start_time = time.time()
-    result = await asyncio.to_thread(graph.invoke,
+    result = await graph.ainvoke(
         {
             "messages": [{"role": "user", "content": scrubbed}],
             "session_id": msg.session_id,
@@ -532,8 +630,7 @@ async def process_chat_message(msg: ChatMessage):
     REQUEST_LATENCY.labels(endpoint="/chat/message").observe(latency)
     
     # Update metrics
-    if result.get("interrupted"):
-        HITL_PENDING.inc()
+    await get_interrupted_threads()
     
     containment = 1.0 if not result.get("interrupted") and result.get("current_intent") != "human_escalation" else 0.0
     QUERY_CONTAINMENT.set(containment)
@@ -552,83 +649,99 @@ async def process_chat_message(msg: ChatMessage):
 # Supervisor Dashboard (HITL)
 # ────────────────────────────────────────────────────────────────
 
-# FIX#5: replaces undefined get_all_thread_ids() with direct SQLite query
-def get_interrupted_threads() -> list:
-    """Query the LangGraph checkpoint store for threads awaiting human approval.
-    
-    Uses SqliteSaver tables directly for thread enumeration, then validates
-    each thread via graph.get_state() to properly deserialize checkpoint data.
-    """
-    db_path = os.environ.get("SQLITE_PATH", "checkpoints.db")
+async def get_interrupted_threads() -> list:
+    """Query the LangGraph checkpoint store for threads awaiting human approval."""
     graph = get_graph()
     interrupted = []
+    thread_ids = []
+    seen = set()
     
     try:
-        conn = sqlite3.connect(db_path)
-        conn.row_factory = sqlite3.Row
-        # Get distinct thread IDs from the checkpoints table
-        cursor = conn.execute(
-            "SELECT DISTINCT thread_id FROM checkpoints ORDER BY thread_id DESC LIMIT 100"
-        )
-        thread_ids = [row["thread_id"] for row in cursor.fetchall()]
-        conn.close()
+        async for tuple_ in graph.checkpointer.alist(None, limit=100):
+            tid = tuple_.config.get("configurable", {}).get("thread_id")
+            if tid and tid not in seen:
+                seen.add(tid)
+                thread_ids.append(tid)
     except Exception as e:
-        print(f"Thread enumeration error: {e}")
-        return []
-    
-    for thread_id in thread_ids:
+        logger.error(f"Error checking checkpoints: {e}")
+        
+    for tid in thread_ids:
         try:
-            state = graph.get_state({"configurable": {"thread_id": thread_id}})
-            if not state:
-                continue
-            values = state.values if hasattr(state, "values") else {}
-            if isinstance(values, dict) and (values.get("interrupted") or values.get("requires_hitl")):
-                interrupted.append(thread_id)
+            state = await graph.aget_state({"configurable": {"thread_id": tid}})
+            vals = state.values if hasattr(state, "values") else {}
+            if state.next or vals.get("interrupted") or vals.get("status") == "INTERRUPTED" or vals.get("requires_hitl"):
+                interrupted.append((tid, state))
         except Exception as e:
-            print(f"Error reading thread {thread_id}: {e}")
-            continue
+            logger.error(f"Error getting state for {tid}: {e}")
     
-    return list(set(interrupted))
-
-@app.get("/supervisor/pending")
-async def get_pending_threads(_=Depends(verify_supervisor_token)):
-    """Get all pending HITL threads for supervisor dashboard."""
-    # FIX C-4: wrap blocking SQLite scan in a thread so the event loop is never blocked
-    thread_ids = await asyncio.to_thread(get_interrupted_threads)
     pending = []
-    graph = get_graph()
-    
-    for thread_id in thread_ids:
+    for thread_id, state in interrupted:
         try:
-            state = graph.get_state({"configurable": {"thread_id": thread_id}})
-            if not state:
-                continue
-                
-            values = state.values if hasattr(state, 'values') else {}
+            values = state.values
+            last_msg = values.get("messages", [])[-1] if values.get("messages") else None
             
-            # Calculate risk score if not present
             risk_score = values.get("risk_score", 0.0)
             if not risk_score and values.get("shield_flags"):
                 risk_score = 0.5
             
             pending.append({
                 "thread_id": thread_id,
+                "created_at": datetime.utcnow().isoformat() + "Z",
+                "risk_score": risk_score,
+                "trigger_reason": values.get("current_intent", "high_value_transaction"),
+                "context_summary": last_msg.content if last_msg and hasattr(last_msg, "content") else str(last_msg) if last_msg else "Action pending approval",
                 "customer_context": values.get("messages", [])[-3:] if isinstance(values.get("messages"), list) else [],
                 "interrupt_reason": values.get("interrupt_reason"),
-                "risk_score": risk_score,
                 "intent": values.get("current_intent"),
-                "language": values.get("language", "en"),
                 "channel": values.get("channel", "chat"),
                 "timestamp": values.get("metadata", {}).get("timestamp") if isinstance(values.get("metadata"), dict) else None,
                 "onboarding_step": values.get("onboarding_step"),
-                "user_id": values.get("user_id")
+                "user_id": values.get("user_id"),
+                "language": values.get("language", "en")
             })
         except Exception as e:
-            print(f"Error reading thread {thread_id}: {e}")
+            logger.error(f"Error reading thread {thread_id}: {e}")
             continue
     
     HITL_PENDING.set(len(pending))
     return pending
+
+@api_router.get("/supervisor/threads")
+async def get_supervisor_threads(_=Depends(verify_supervisor_token)):
+    """List all threads currently interrupted waiting for HITL approval."""
+    data = await get_interrupted_threads()
+    return {"threads": data, "count": len(data)}
+
+class SupervisorDecision(BaseModel):
+    thread_id: str
+    approved: bool
+    reason: Optional[str] = "Supervisor review"
+    approver_id: str = "SUP_001"
+
+@api_router.post("/supervisor/decide")
+async def supervisor_decide(decision: SupervisorDecision, _=Depends(verify_supervisor_token)):
+    """Submit HITL approval/rejection decision to resume graph execution."""
+    graph = get_graph()
+    thread_id = decision.thread_id
+    
+    if decision.approved:
+        await graph.ainvoke(
+            Command(resume={"approved": True, "approver_id": decision.approver_id, "reason": decision.reason}),
+            config={"configurable": {"thread_id": thread_id}}
+        )
+    else:
+        await graph.ainvoke(
+            Command(resume={"approved": False, "reason": decision.reason, "approver_id": decision.approver_id}),
+            config={"configurable": {"thread_id": thread_id}}
+        )
+    
+    await get_interrupted_threads()
+    return {"status": "processed", "thread_id": thread_id, "approved": decision.approved}
+
+@app.get("/supervisor/pending")
+async def get_pending_threads(_=Depends(verify_supervisor_token)):
+    """Get all pending HITL threads for supervisor dashboard."""
+    return await get_interrupted_threads()
 
 @app.post("/supervisor/approve/{thread_id}")
 async def approve_thread(
@@ -636,10 +749,7 @@ async def approve_thread(
     decision: HITLDecision,
     _=Depends(verify_supervisor_token)
 ):
-    """Approve or reject a HITL-interrupted thread.
-    
-    FIX#2: Command is imported from langgraph.types
-    """
+    """Approve or reject a HITL-interrupted thread."""
     if Command is None:
         raise HTTPException(status_code=500, detail="LangGraph Command not available")
     
@@ -657,22 +767,18 @@ async def approve_thread(
         state_snapshot={}
     )
     
-    pending_before = set(await asyncio.to_thread(get_interrupted_threads))
-    was_pending = thread_id in pending_before
-
     if decision.approved:
-        await asyncio.to_thread(graph.invoke,
+        await graph.ainvoke(
             Command(resume={"approved": True, "approver_id": decision.approver_id, "reason": decision.reason}),
             config={"configurable": {"thread_id": thread_id}}
         )
     else:
-        await asyncio.to_thread(graph.invoke,
+        await graph.ainvoke(
             Command(resume={"approved": False, "reason": decision.reason, "approver_id": decision.approver_id}),
             config={"configurable": {"thread_id": thread_id}}
         )
     
-    if was_pending:
-        HITL_PENDING.dec()
+    await get_interrupted_threads()
 
     return {
         "status": "processed",
@@ -687,25 +793,26 @@ async def get_all_threads(
     _=Depends(verify_supervisor_token)
 ):
     """Get all recent threads (not just interrupted)."""
-    db_path = os.environ.get("SQLITE_PATH", "checkpoints.db")
     graph = get_graph()
     threads = []
+    thread_ids = set()
+    ordered_ids = []
     
     try:
-        conn = sqlite3.connect(db_path)
-        cursor = conn.execute(
-            "SELECT DISTINCT thread_id FROM checkpoints ORDER BY thread_id DESC LIMIT ?",
-            (limit,)
-        )
-        thread_ids = [row[0] for row in cursor.fetchall()]
-        conn.close()
+        async for tuple_ in graph.checkpointer.alist(None, limit=limit * 2):
+            tid = tuple_.config.get("configurable", {}).get("thread_id")
+            if tid and tid not in thread_ids:
+                thread_ids.add(tid)
+                ordered_ids.append(tid)
+                if len(ordered_ids) >= limit:
+                    break
     except Exception as e:
-        print(f"Thread enumeration error: {e}")
+        logger.error(f"Thread enumeration error: {e}")
         return []
     
-    for thread_id in thread_ids:
+    for thread_id in ordered_ids:
         try:
-            state = graph.get_state({"configurable": {"thread_id": thread_id}})
+            state = await graph.aget_state({"configurable": {"thread_id": thread_id}})
             if not state:
                 continue
             values = state.values if hasattr(state, "values") else {}
@@ -718,7 +825,7 @@ async def get_all_threads(
                 "risk_score": values.get("risk_score", 0.0),
             })
         except Exception as e:
-            print(f"Error reading thread {thread_id}: {e}")
+            logger.warning(f"Error reading thread {thread_id}: {e}")
             continue
     
     return threads
@@ -874,7 +981,7 @@ async def yono_transaction_webhook(payload: YONOTransaction, _=Depends(verify_ap
     # Convert amount to integer paise
     txn_data["amount"] = int(round(payload.amount * 100))
     
-    result = await asyncio.to_thread(graph.invoke,
+    result = await graph.ainvoke(
         {
             "transaction": txn_data,
             "trigger": "yono_webhook",
@@ -950,7 +1057,7 @@ async def shield_check_endpoint(req: ShieldCheckRequest, _=Depends(verify_api_to
 @app.get("/demo/supervisor/pending")
 async def demo_supervisor_pending(_=Depends(verify_api_token)):
     """Read-only HITL queue for demo mode. No approval capability."""
-    threads = await asyncio.to_thread(get_interrupted_threads)
+    threads = await get_interrupted_threads()
     return {"pending": threads, "note": "Approval requires SBI officer credentials"}
 
 
@@ -966,9 +1073,10 @@ async def get_demo_token():
     if not DEMO_MODE:
         raise HTTPException(status_code=403, detail="Demo mode disabled")
 
-    # Generate a fresh ephemeral demo token — NOT the production API_TOKEN
+    # Generate a fresh ephemeral demo token with 1 hour TTL
     demo_token = secrets.token_hex(32)
-    ACTIVE_DEMO_TOKENS.add(demo_token)
+    expires = time.time() + 3600
+    ACTIVE_DEMO_TOKENS[demo_token] = expires
 
     return {
         "api_token": demo_token,
@@ -981,7 +1089,7 @@ async def get_demo_token():
             "balance": 124750.00,
             "language": "hi"
         },
-        "expires_at": None,
+        "expires_at": int(expires),
         "note": "This token is scoped to demo endpoints only. Production tokens are issued via SBI NetBanking / YONO SSO and are never exposed over HTTP."
     }
 
@@ -995,11 +1103,13 @@ async def seed_demo_data(_=Depends(verify_api_token)):
     - A demo HITL approval (loan > 50K awaiting supervisor)
     - A demo audit trail with sample events
     """
+    if not DEMO_MODE:
+        raise HTTPException(status_code=403, detail="Demo mode disabled")
     graph = get_graph()
     
     # 1. Seed an onboarding thread at "collect_pan" step
     thread_id = "demo_onboarding_001"
-    await asyncio.to_thread(graph.invoke,
+    await graph.ainvoke(
         {
             "session_id": thread_id,
             "messages": [{"role": "user", "content": "Account kholna hai"}],
@@ -1015,7 +1125,7 @@ async def seed_demo_data(_=Depends(verify_api_token)):
     
     # 2. Seed a HITL-interrupted loan thread
     loan_thread = "demo_loan_hitl_001"
-    await asyncio.to_thread(graph.invoke,
+    await graph.ainvoke(
         {
             "session_id": loan_thread,
             "messages": [{"role": "user", "content": "Mujhe 5 lakh ka loan chahiye"}],

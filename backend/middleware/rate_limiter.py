@@ -1,3 +1,4 @@
+import os
 import time
 import asyncio
 from fastapi import Request, HTTPException
@@ -30,10 +31,12 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 if current > self.rate_limit:
                     logger.warning("Rate limit exceeded", ip=client_ip, path=request.url.path)
                     raise HTTPException(status_code=429, detail="Too Many Requests")
+        except HTTPException:
+            raise
         except Exception as e:
-            # Fail closed: if Redis is down, deny the request for banking security
-            logger.error("Rate limiter failed (Redis unavailable)", ip=client_ip, error=str(e))
-            raise HTTPException(status_code=503, detail="Service temporarily unavailable — rate limiter offline")
+            logger.warning("rate_limiter_redis_unavailable", ip=client_ip, error=str(e))
+            if os.environ.get("SARTHI_ENV", "development").lower() == "production":
+                raise HTTPException(status_code=503, detail="Service temporarily unavailable — rate limiter offline")
             
         response = await call_next(request)
         return response

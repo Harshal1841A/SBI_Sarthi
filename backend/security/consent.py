@@ -7,6 +7,9 @@ import time
 import os
 from typing import List, Optional
 from datetime import datetime
+import structlog
+
+logger = structlog.get_logger()
 
 # ────────────────────────────────────────────────────────────────
 # Hash-Chain Consent Artifacts — DPDP Act 2023 Compliance
@@ -15,20 +18,26 @@ from datetime import datetime
 # 4 distinct purposes: P001, P002, P003, P004
 # ────────────────────────────────────────────────────────────────
 
-# FIX#4: Load SERVER_SECRET from environment — never generate at runtime.
-# A new random secret on every server restart makes all stored HMACs unverifiable.
-# One-time setup: python -c "import secrets; print(secrets.token_hex(32))"
-# Store in .env as: SARTHI_HMAC_SECRET=<64-char hex string>
-_raw_secret = os.environ.get("SARTHI_HMAC_SECRET", "")
-if not _raw_secret or len(_raw_secret) < 64 or _raw_secret.startswith("GENERATE_ME") or _raw_secret == "0" * 64:
-    import logging
-    logging.warning("SARTHI_HMAC_SECRET not set or invalid. Using prototype default secret for demo environment.")
-    _raw_secret = "a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0"
+import structlog
 
-try:
-    SERVER_SECRET: bytes = bytes.fromhex(_raw_secret[:64])
-except ValueError:
-    SERVER_SECRET = bytes.fromhex("a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0")
+logger = structlog.get_logger("consent")
+
+_sarthi_env = os.environ.get("SARTHI_ENV", "development").lower()
+_raw_secret = os.environ.get("SARTHI_HMAC_SECRET", "")
+
+if not _raw_secret or len(_raw_secret) < 64 or _raw_secret.startswith("GENERATE_ME") or _raw_secret == "0" * 64:
+    if _sarthi_env != "development":
+        raise RuntimeError("SARTHI_HMAC_SECRET required")
+    logger.warning("SARTHI_HMAC_SECRET missing or short in development; using random 32-byte secret. Consent artifacts will not verify across restarts.")
+    SERVER_SECRET = os.urandom(32)
+else:
+    try:
+        SERVER_SECRET = bytes.fromhex(_raw_secret[:64])
+    except ValueError:
+        if _sarthi_env != "development":
+            raise RuntimeError("SARTHI_HMAC_SECRET required")
+        logger.warning("SARTHI_HMAC_SECRET invalid hex in development; using random 32-byte secret.")
+        SERVER_SECRET = os.urandom(32)
 
 # Consent purpose definitions per DPDP Act 2023 + RBI norms
 CONSENT_PURPOSES = {
@@ -196,7 +205,7 @@ def _save_consent_chain(user_id: str, chain: List[dict]) -> None:
         with open(path, "w", encoding="utf-8") as f:
             json.dump(chain, f, default=str)
     except Exception as e:
-        print(f"Failed to persist consent chain: {e}")
+        logger.error("persist_consent_chain_failed", error=str(e))
 
 
 def store_consent_artifact(artifact: dict) -> None:

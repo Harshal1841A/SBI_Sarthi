@@ -172,16 +172,25 @@ function App() {
   const [activeTab, setActiveTab] = useState<NavTab>('home');
   const [backendStatus, setBackendStatus] = useState<'checking' | 'up' | 'down'>('checking');
 
-  // Check backend health and get demo tokens on mount
+  // Check backend health and auto-fetch demo tokens on mount if not present
   useEffect(() => {
     systemApi.getHealth()
       .then(() => {
         setBackendStatus('up');
-        // Fetch demo tokens if missing
-        if (!localStorage.getItem('sarthi_token') || !localStorage.getItem('sarthi_supervisor_token')) {
+        // Check sessionStorage first (migrated), fall back to localStorage (legacy)
+        const hasToken = sessionStorage.getItem('sarthi_token') || localStorage.getItem('sarthi_token');
+        const hasSup = sessionStorage.getItem('sarthi_supervisor_token') || localStorage.getItem('sarthi_supervisor_token');
+        if (!hasToken || !hasSup) {
           systemApi.getDemoToken().then(data => {
-            if (data.api_token) localStorage.setItem('sarthi_token', data.api_token);
-            if (data.supervisor_token) localStorage.setItem('sarthi_supervisor_token', data.supervisor_token);
+            // Write to sessionStorage (per BUG-16 migration) — not localStorage
+            if (data.api_token) {
+              sessionStorage.setItem('sarthi_token', data.api_token);
+              localStorage.removeItem('sarthi_token');
+            }
+            if (data.supervisor_token) {
+              sessionStorage.setItem('sarthi_supervisor_token', data.supervisor_token);
+              localStorage.removeItem('sarthi_supervisor_token');
+            }
           }).catch(console.error);
         }
       })

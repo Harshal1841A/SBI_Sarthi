@@ -1,3 +1,4 @@
+import re
 from typing import Any
 from state import SarthiState
 from security.verhoeff import validate_aadhaar, validate_pan, AadhaarValidationError
@@ -13,7 +14,7 @@ from utils.cache import cached_llm_call
 # ────────────────────────────────────────────────────────────────
 
 
-def acquisition_agent(state: SarthiState) -> dict:
+async def acquisition_agent(state: SarthiState) -> dict:
     """Acquisition Agent: handle onboarding flows, KYC, consent, loan origination.
     
     State machine for onboarding:
@@ -264,8 +265,8 @@ def _process_consent(state: SarthiState, user_text: str) -> dict:
     yes_indicators = ["yes", "ho", "haan", "ha", "sahi", "barobar", "agree", "sahmat", "同意", "sí"]
     no_indicators = ["no", "na", "nako", "nahi", "nahin", "reject", "refuse", "cancel"]
     
-    has_yes = any(y in user_text_lower for y in yes_indicators)
-    has_no = any(n in user_text_lower for n in no_indicators)
+    has_yes = any(re.search(r'\b' + y + r'\b', user_text_lower) for y in yes_indicators)
+    has_no = any(re.search(r'\b' + n + r'\b', user_text_lower) for n in no_indicators)
     
     if has_yes or has_no:
         # Record consent artifact

@@ -9,7 +9,7 @@ from security.audit import create_audit_artifact
 # ────────────────────────────────────────────────────────────────
 
 
-def engagement_agent(state: SarthiState) -> dict:
+async def engagement_agent(state: SarthiState) -> dict:
     """Engagement Agent: financial wellness coaching, churn prevention, dormant reactivation.
     
     Detects:

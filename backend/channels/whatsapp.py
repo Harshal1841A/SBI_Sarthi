@@ -12,7 +12,7 @@ WHATSAPP_VERIFY_TOKEN = os.environ.get("WHATSAPP_VERIFY_TOKEN", "")
 if not WHATSAPP_VERIFY_TOKEN:
     import secrets
     WHATSAPP_VERIFY_TOKEN = secrets.token_hex(16)
-    print(f"WARNING: WHATSAPP_VERIFY_TOKEN not set. Generated temporary token: {WHATSAPP_VERIFY_TOKEN}")
+    logger.warning("whatsapp_verify_token_missing", temp_token=WHATSAPP_VERIFY_TOKEN)
 
 class WhatsAppMessage(BaseModel):
     # Simplified model for WhatsApp webhook payload

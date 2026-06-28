@@ -260,8 +260,8 @@ function getDemoAuditLogs(): AuditLogEntry[] {
       decision: { action: 'route_intent', intent: 'account_open', confidence: 0.92 },
       timestamp: Date.now() / 1000 - 300,
       timestamp_iso: new Date().toISOString(),
-      hash: 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2',
-      prev_hash: '0' + '0'.repeat(63)
+      hash: 'a1b2c3d4-e5f6-a1b2-c3d4-e5f6a1b2c3d4',
+      prev_hash: '00000000-0000-0000-0000-000000000000'
     },
     {
       event_type: 'shield_flag',
@@ -270,8 +270,8 @@ function getDemoAuditLogs(): AuditLogEntry[] {
       decision: { action: 'pii_scrubbed', patterns: ['aadhaar', 'pan'] },
       timestamp: Date.now() / 1000 - 280,
       timestamp_iso: new Date().toISOString(),
-      hash: 'b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3',
-      prev_hash: 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2'
+      hash: 'b2c3d4e5-f6a1-b2c3-d4e5-f6a1b2c3d4e5',
+      prev_hash: 'a1b2c3d4-e5f6-a1b2-c3d4-e5f6a1b2c3d4'
     },
     {
       event_type: 'hitl_interrupt',
@@ -280,8 +280,8 @@ function getDemoAuditLogs(): AuditLogEntry[] {
       decision: { action: 'v_kyc_required', reason: 'loan_amount_exceeds_50k' },
       timestamp: Date.now() / 1000 - 100,
       timestamp_iso: new Date().toISOString(),
-      hash: 'c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4',
-      prev_hash: 'b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3'
+      hash: 'c3d4e5f6-a1b2-c3d4-e5f6-a1b2c3d4e5f6',
+      prev_hash: 'b2c3d4e5-f6a1-b2c3-d4e5-f6a1b2c3d4e5'
     }
   ];
 }

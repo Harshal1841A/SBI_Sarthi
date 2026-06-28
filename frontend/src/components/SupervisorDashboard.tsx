@@ -55,7 +55,7 @@ export default function SupervisorDashboard() {
       await fetchPending();
     } catch (err: any) {
       console.error('Approval failed:', err);
-      if (err?.response?.status === 403 || localStorage.getItem('sarthi_demo_active') === 'true') {
+      if (err?.response?.status === 403 || sessionStorage.getItem('sarthi_demo_active') === 'true' || localStorage.getItem('sarthi_demo_active') === 'true') {
         alert('Approval requires SBI officer credentials (Demo read-only mode)');
       }
     } finally {
@@ -78,7 +78,7 @@ export default function SupervisorDashboard() {
       await fetchPending();
     } catch (err: any) {
       console.error('Rejection failed:', err);
-      if (err?.response?.status === 403 || localStorage.getItem('sarthi_demo_active') === 'true') {
+      if (err?.response?.status === 403 || sessionStorage.getItem('sarthi_demo_active') === 'true' || localStorage.getItem('sarthi_demo_active') === 'true') {
         alert('Approval requires SBI officer credentials (Demo read-only mode)');
       }
     } finally {

@@ -18,7 +18,9 @@ from typing import AsyncGenerator, Optional
 # Health check: curl http://localhost:9000/v1/health/ready
 # ────────────────────────────────────────────────────────────────
 
-import websockets, json, os, io, struct
+import websockets, json, os, io, struct, structlog
+
+logger = structlog.get_logger()
 
 # Language code mapping: Sarthi internal → Chatterbox NIM
 _LANG_MAP = {
@@ -269,22 +271,22 @@ async def tts_cascade(text: str, lang: str = "hi") -> bytes:
     try:
         return await bhashini_ws_tts(text, lang)
     except Exception as e:
-        print(f"[TTS] Bhashini failed: {e}")
+        logger.warning("tts_tier_failed", tier="bhashini", error=str(e))
     
     # Tier 2: Chatterbox NIM
     try:
         return await chatterbox_nim_tts(text, lang)
     except Exception as e:
-        print(f"[TTS] Chatterbox NIM failed: {e}")
+        logger.warning("tts_tier_failed", tier="chatterbox_nim", error=str(e))
     
     # Tier 3: Sarvam.ai
     try:
         return await sarvam_tts(text, lang)
     except Exception as e:
-        print(f"[TTS] Sarvam failed: {e}")
+        logger.warning("tts_tier_failed", tier="sarvam", error=str(e))
     
     # Tier 4: Mock (always works)
-    print("[TTS] All TTS tiers failed, using mock sine wave")
+    logger.warning("tts_all_tiers_failed", action="using_mock_sine_wave")
     return await mock_tts(text, lang)
 
 

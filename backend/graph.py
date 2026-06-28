@@ -1,13 +1,19 @@
 from typing import Any
 from state import SarthiState
 from langgraph.graph import StateGraph, END
-from langgraph.checkpoint.sqlite import SqliteSaver
+from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from langgraph.types import Command
 
 import asyncio
 import os
 import threading
-import sqlite3
+import aiosqlite
+try:
+    import psycopg_pool
+    from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+except ImportError:
+    AsyncPostgresSaver = None
+    psycopg_pool = None
 
 # Import all agent nodes
 from agents.supervisor import supervisor_node, route_intent
@@ -24,73 +30,35 @@ from agents.hitl import hitl_pause_node, hitl_resume_node, wait_human_approval
 # Deterministic routing, HITL breakpoints, Saga Pattern support.
 # ────────────────────────────────────────────────────────────────
 
-def build_graph():
-    """Build and compile the Sarthi LangGraph StateGraph.
-
-    Returns:
-        Compiled graph with SqliteSaver checkpointing.
-    """
+def build_graph() -> Any:
+    """Build and compile the Sarthi LangGraph StateGraph with Postgres or SQLite checkpointing."""
     builder = StateGraph(SarthiState)
 
-    # FIX C-3: Never use asyncio.run() inside a wrapper called from asyncio.to_thread()
-    # — that creates a NEW event loop inside a thread that already has one, causing deadlock.
-    # Instead: run async nodes synchronously via a dedicated per-call event loop in the thread.
-    def _wrap(node_fn, name: str):
-        """Wrap an agent node to catch exceptions and return safe state.
-        
-        Sync nodes are called directly.
-        Async nodes are run via asyncio.run() which is safe here because graph.invoke()
-        is always called from asyncio.to_thread() — the thread has NO running event loop.
-        """
-        if asyncio.iscoroutinefunction(node_fn):
-            def _sync_wrapper(state: SarthiState) -> dict:
+    def _wrap(node_fn: Any, name: str) -> Any:
+        """Wrap an agent node to catch exceptions and return safe state asynchronously."""
+        async def _async_wrapper(state: SarthiState) -> dict:
+            try:
+                if asyncio.iscoroutinefunction(node_fn):
+                    return await node_fn(state)
+                return node_fn(state)
+            except Exception as e:
+                from security.audit import create_audit_artifact
                 try:
-                    try:
-                        loop = asyncio.get_event_loop()
-                    except RuntimeError:
-                        loop = asyncio.new_event_loop()
-                        asyncio.set_event_loop(loop)
-                    return loop.run_until_complete(node_fn(state))
-                except Exception as e:
-                    from security.audit import create_audit_artifact
-                    try:
-                        create_audit_artifact(
-                            event_type="agent_error",
-                            session_id=state.get("session_id", "unknown"),
-                            agent_name=name,
-                            decision={"error": str(e)},
-                            state_snapshot={"status": state.get("status")}
-                        )
-                    except Exception:
-                        pass  # Audit failure must never mask the original error
-                    return {
-                        "response_text": "Sorry, I encountered a technical issue. Please try again or contact SBI at 1800-11-2211.",
-                        "status": "IDLE",
-                        "shield_flags": [f"agent_error:{name}"]
-                    }
-            return _sync_wrapper
-        else:
-            def _sync_wrapper(state: SarthiState) -> dict:
-                try:
-                    return node_fn(state)
-                except Exception as e:
-                    from security.audit import create_audit_artifact
-                    try:
-                        create_audit_artifact(
-                            event_type="agent_error",
-                            session_id=state.get("session_id", "unknown"),
-                            agent_name=name,
-                            decision={"error": str(e)},
-                            state_snapshot={"status": state.get("status")}
-                        )
-                    except Exception:
-                        pass
-                    return {
-                        "response_text": "Sorry, I encountered a technical issue. Please try again or contact SBI at 1800-11-2211.",
-                        "status": "IDLE",
-                        "shield_flags": [f"agent_error:{name}"]
-                    }
-            return _sync_wrapper
+                    create_audit_artifact(
+                        event_type="agent_error",
+                        session_id=state.get("session_id", "unknown"),
+                        agent_name=name,
+                        decision={"error": str(e)},
+                        state_snapshot={"status": state.get("status")}
+                    )
+                except Exception:
+                    pass
+                return {
+                    "response_text": "Sorry, I encountered a technical issue. Please try again or contact SBI at 1800-11-2211.",
+                    "status": "IDLE",
+                    "shield_flags": [f"agent_error:{name}"]
+                }
+        return _async_wrapper
 
     # Add all nodes with error handling
     builder.add_node("supervisor", _wrap(supervisor_node, "supervisor"))
@@ -128,7 +96,7 @@ def build_graph():
             "complete": "adoption",
             "failed": "compensation",
             "interrupted": "hitl_pause",
-            "running": "acquisition"
+            "running": "shield"
         }
     )
 
@@ -182,29 +150,53 @@ def build_graph():
     builder.add_edge("shield", END)
     builder.add_edge("compensation", END)
 
-    # FIX H-2: Use check_same_thread=False with a high timeout and WAL mode.
-    # This allows concurrent threads to use the connection without locking errors.
-    db_path = os.environ.get("SQLITE_PATH", "checkpoints.db")
-    conn = sqlite3.connect(db_path, check_same_thread=False, timeout=30.0)
-    conn.execute("PRAGMA journal_mode=WAL")
-    memory = SqliteSaver(conn)
-    graph = builder.compile(checkpointer=memory)
+    def _init_saver(cls: Any, *a: Any, **kw: Any) -> Any:
+        import threading
+        if not hasattr(_init_saver, "_lock"):
+            _init_saver._lock = threading.Lock()
+        with _init_saver._lock:
+            try:
+                asyncio.get_running_loop()
+                return cls(*a, **kw)
+            except RuntimeError:
+                try:
+                    loop = asyncio.get_event_loop()
+                except RuntimeError:
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                orig = asyncio.get_running_loop
+                asyncio.get_running_loop = lambda: loop
+                try:
+                    return cls(*a, **kw)
+                finally:
+                    asyncio.get_running_loop = orig
 
+    db_url = os.environ.get("DATABASE_URL")
+    env = os.environ.get("SARTHI_ENV", "development")
+
+    if db_url and AsyncPostgresSaver is not None and psycopg_pool is not None:
+        pool = psycopg_pool.AsyncConnectionPool(conninfo=db_url, open=False)
+        memory = _init_saver(AsyncPostgresSaver, pool)
+    else:
+        if env == "production":
+            raise RuntimeError("Refusing to start with SQLite checkpointing when SARTHI_ENV == 'production'. DATABASE_URL must be set.")
+        db_path = os.environ.get("SQLITE_PATH", "checkpoints.db")
+        conn = aiosqlite.connect(db_path)
+        memory = _init_saver(AsyncSqliteSaver, conn)
+
+    graph = builder.compile(checkpointer=memory)
     return graph
 
 
-# FIX H-1: Thread-safe singleton with explicit lock.
-# Prevents race condition when multiple threads in the same uvicorn worker cold-start simultaneously.
-_graph_instance = None
+_graph_instance: Any = None
 _graph_lock = threading.Lock()
 
 
-def get_graph():
+def get_graph() -> Any:
     """Get or create the compiled graph instance (thread-safe singleton)."""
     global _graph_instance
     if _graph_instance is None:
         with _graph_lock:
-            # Double-checked locking: re-check inside lock
             if _graph_instance is None:
                 _graph_instance = build_graph()
     return _graph_instance

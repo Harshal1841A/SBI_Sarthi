@@ -12,7 +12,7 @@ from security.audit import create_audit_artifact
 # ────────────────────────────────────────────────────────────────
 
 
-def shield_agent(state: SarthiState) -> dict:
+async def shield_agent(state: SarthiState) -> dict:
     """Shield Agent: comprehensive security and compliance validation.
     
     This is NOT just a gate — it's a parallel compliance monitor that

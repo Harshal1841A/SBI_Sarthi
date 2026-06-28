@@ -63,7 +63,7 @@ export function useVoice() {
   const workletNodeRef   = useRef<AudioWorkletNode | null>(null);
   const workletUrlRef    = useRef<string | null>(null); // track blob URL for cleanup
   const streamRef        = useRef<MediaStream | null>(null);
-  const tokenRef         = useRef<string>(localStorage.getItem('sarthi_token') || '');
+  const tokenRef         = useRef<string>(sessionStorage.getItem('sarthi_token') || localStorage.getItem('sarthi_token') || '');
 
   const playAudio = useCallback((blob: Blob) => {
     const url = URL.createObjectURL(blob);
@@ -83,10 +83,11 @@ export function useVoice() {
   }, []);
 
   const startVoiceSession = useCallback(async () => {
-    const token = tokenRef.current;
+    const token = sessionStorage.getItem('sarthi_token') || localStorage.getItem('sarthi_token') || tokenRef.current;
     if (!token) {
       throw new Error('API token not configured');
     }
+    tokenRef.current = token;
 
     // Connect WebSocket
     const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';

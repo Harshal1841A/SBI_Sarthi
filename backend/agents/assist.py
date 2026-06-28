@@ -1,3 +1,4 @@
+import re
 from typing import Any
 from state import SarthiState
 from security.audit import create_audit_artifact
@@ -11,7 +12,7 @@ from utils.cache import cached_llm_call
 # ────────────────────────────────────────────────────────────────
 
 
-def assist_agent(state: SarthiState) -> dict:
+async def assist_agent(state: SarthiState) -> dict:
     """Assist Agent: omnichannel support with human escalation.
     
     Confidence threshold: < 0.85 -> automatic human escalation.
@@ -182,10 +183,10 @@ def _handle_general_chat(state: SarthiState) -> dict:
     text_lower = user_text.lower()
     
     # Marathi-English
-    if any(w in text_lower for w in ["khata", "khate", "paisa", "muli", "sangaa", "ho", "nako"]):
+    if any(re.search(r'\b' + w + r'\b', text_lower) for w in ["khata", "khate", "paisa", "muli", "sangaa", "nako"]):
         lang = "mr"
     # Hindi-English
-    elif any(w in text_lower for w in ["mujhe", "mera", "hai", "chahiye", "batao", "bhaiya"]):
+    elif any(re.search(r'\b' + w + r'\b', text_lower) for w in ["mujhe", "mera", "chahiye", "batao", "bhaiya"]):
         lang = "hi"
     
     # Greetings

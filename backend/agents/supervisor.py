@@ -6,6 +6,7 @@ from security.audit import create_audit_artifact
 from utils.cache import cached_llm_call, async_cached_llm_call
 from nlp.nemotron_client import NemotronClient
 import asyncio
+import re
 
 # ────────────────────────────────────────────────────────────────
 # Supervisor Node — Intent Router + Context Manager + Escalation
@@ -48,13 +49,18 @@ Examples:
 8. "Mera khata band karun deu ka?" -> {"intent": "churn_risk", "confidence": 0.87, "entities": {"language": "mr", "intent": "account_closure"}}
 """
 
+import threading
+
 # Lazy singleton — created on first use to avoid import-time side effects
 _nemotron_instance: Optional[NemotronClient] = None
+_nemotron_lock = threading.Lock()
 
 def _get_nemotron() -> NemotronClient:
     global _nemotron_instance
     if _nemotron_instance is None:
-        _nemotron_instance = NemotronClient()
+        with _nemotron_lock:
+            if _nemotron_instance is None:
+                _nemotron_instance = NemotronClient()
     return _nemotron_instance
 
 async def supervisor_node(state: SarthiState) -> dict:
@@ -215,13 +221,13 @@ async def _classify_intent_llm(text: str, language: str) -> dict:
 def _classify_intent_fallback(text: str, language: str) -> dict:
     try:
         text_lower = text.lower()
-        marathi_words = ["khata", "khate", "paisa", "muli", "mulichi", "shikshan", "madat", "sangaa", "ho", "nako", "barobar"]
-        hindi_words = ["mujhe", "mera", "meri", "hai", "chahiye", "batao", "karo", "bhaiya", "ji", "ka"]
+        marathi_words = ["khata", "khate", "paisa", "muli", "mulichi", "shikshan", "madat", "sangaa", "nako", "barobar"]
+        hindi_words = ["mujhe", "mera", "meri", "chahiye", "batao", "karo", "bhaiya"]
 
         detected_lang = language
-        if any(w in text_lower for w in marathi_words):
+        if any(re.search(r'\b' + w + r'\b', text_lower) for w in marathi_words):
             detected_lang = "mr"
-        elif any(w in text_lower for w in hindi_words):
+        elif any(re.search(r'\b' + w + r'\b', text_lower) for w in hindi_words):
             detected_lang = "hi"
 
         intent_map = {

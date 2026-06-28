@@ -10,7 +10,7 @@ from security.audit import create_audit_artifact
 # ────────────────────────────────────────────────────────────────
 
 
-def compensation_node(state: SarthiState) -> dict:
+async def compensation_node(state: SarthiState) -> dict:
     """Compensation Node: execute Saga rollback in reverse order.
     
     Onboarding saga steps (in order):

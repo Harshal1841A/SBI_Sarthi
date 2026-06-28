@@ -62,7 +62,7 @@ SBI_PRODUCTS = {
 }
 
 
-def adoption_agent(state: SarthiState) -> dict:
+async def adoption_agent(state: SarthiState) -> dict:
     """Adoption Agent: deliver personalized product recommendations and cross-sell nudges.
     
     Requires P003 consent. If not granted, returns silent (no recommendation).

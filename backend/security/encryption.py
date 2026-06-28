@@ -2,6 +2,9 @@ import hashlib
 import os
 import hmac
 from typing import Optional
+import structlog
+
+logger = structlog.get_logger()
 
 # ────────────────────────────────────────────────────────────────
 # Field Encryption / Hashing — RBI Data Localisation Compliance
@@ -16,10 +19,7 @@ _FIELD_SALT = os.environ.get("SARTHI_FIELD_SALT", "").encode("utf-8")
 if not _FIELD_SALT:
     import secrets
     _FIELD_SALT = secrets.token_bytes(16)
-    print(
-        "WARNING: SARTHI_FIELD_SALT not set. Generated temporary salt. "
-        "Set SARTHI_FIELD_SALT for deterministic hashing across restarts."
-    )
+    logger.warning("sarthi_field_salt_missing", message="Generated temporary salt. Set SARTHI_FIELD_SALT for deterministic hashing across restarts.")
 
 
 def hash_field(value: str) -> str:
