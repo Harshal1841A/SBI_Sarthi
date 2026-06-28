@@ -2,6 +2,8 @@ from dotenv import load_dotenv
 load_dotenv()
 import json
 import secrets  # FIX L-2: top-level import, not repeated inside conditionals
+import hmac
+import hashlib
 try:
     from langgraph.types import Command
 except ImportError:
@@ -94,13 +96,39 @@ security = HTTPBearer(auto_error=False)
 
 ACTIVE_DEMO_TOKENS: dict[str, float] = {}
 
+def _get_demo_hmac_secret() -> bytes:
+    return (HMAC_SECRET or API_TOKEN or "sarthi_demo_stateless_secret_2026").encode("utf-8")
+
+def _generate_demo_token() -> str:
+    expires = int(time.time() + 3600)
+    exp_hex = f"{expires:08x}"
+    sig = hmac.new(_get_demo_hmac_secret(), exp_hex.encode("utf-8"), hashlib.sha256).hexdigest()[:56]
+    token = sig + exp_hex
+    ACTIVE_DEMO_TOKENS[token] = float(expires)
+    return token
+
 def _is_valid_demo_token(token: str) -> bool:
-    if token not in ACTIVE_DEMO_TOKENS:
+    if not DEMO_MODE or not token:
         return False
-    if time.time() > ACTIVE_DEMO_TOKENS[token]:
-        del ACTIVE_DEMO_TOKENS[token]
-        return False
-    return True
+    if token in ACTIVE_DEMO_TOKENS:
+        if time.time() > ACTIVE_DEMO_TOKENS[token]:
+            del ACTIVE_DEMO_TOKENS[token]
+            return False
+        return True
+    if len(token) == 64:
+        try:
+            exp_hex = token[56:]
+            sig = token[:56]
+            expires = int(exp_hex, 16)
+            if time.time() > expires:
+                return False
+            expected_sig = hmac.new(_get_demo_hmac_secret(), exp_hex.encode("utf-8"), hashlib.sha256).hexdigest()[:56]
+            if hmac.compare_digest(sig, expected_sig):
+                ACTIVE_DEMO_TOKENS[token] = float(expires)
+                return True
+        except Exception:
+            pass
+    return False
 
 def verify_api_token(request: Request, creds: Optional[HTTPAuthorizationCredentials] = Depends(security)) -> None:
     """Validate Bearer token for standard API endpoints."""
@@ -1076,10 +1104,9 @@ async def get_demo_token():
     if not DEMO_MODE:
         raise HTTPException(status_code=403, detail="Demo mode disabled")
 
-    # Generate a fresh ephemeral demo token with 1 hour TTL
-    demo_token = secrets.token_hex(32)
-    expires = time.time() + 3600
-    ACTIVE_DEMO_TOKENS[demo_token] = expires
+    # Generate a fresh ephemeral stateless demo token with 1 hour TTL
+    demo_token = _generate_demo_token()
+    expires = ACTIVE_DEMO_TOKENS[demo_token]
 
     return {
         "api_token": demo_token,

@@ -231,18 +231,18 @@ def _classify_intent_fallback(text: str, language: str) -> dict:
             detected_lang = "hi"
 
         intent_map = {
-            "account_open": ["khata ugad", "khata khol", "account open", "new account", "savings account", "bachat khata"],
-            "kyc_upload": ["aadhaar", "pan card", "document upload", "kyc"],
-            "loan_application": ["loan chahiye", "loan chahie", "loan apply", "mudra", "education loan", "personal loan"],
-            "product_recommendation": ["product", "recommend", "suggest", "bachat yojna", "scheme", "fd", "rd", "insurance"],
-            "balance_inquiry": ["balance", "kitna hai", "ketna", "balance kitna", "account balance", "paisa kitna"],
-            "transaction_history": ["transaction", "history", "statement", "last payment", "recent"],
-            "spending_alert": ["spend", "spending", "budget", "overdraft", "expense"],
-            "churn_risk": ["close account", "band kar", "churn", "leave", "switch bank", "dusra bank"],
-            "fraud_report": ["fraud", "hack", "unauthorized", "galat", "galti", "card block", "unknown transaction"],
-            "compliance_query": ["compliance", "policy", "rbi", "dpdp", "consent", "privacy"],
-            "dormant_reactivation": ["dormant", "activate", "inactive", "use nahi", "long time"],
-            "human_escalation": ["human", "agent", "officer", "manager", "banda", "aadmi", "madad"]
+            "account_open": ["khata ugad", "khata khol", "account open", "new account", "savings account", "bachat khata", "अकाउंट खोलो", "खाता खोलो"],
+            "kyc_upload": ["aadhaar", "pan card", "document upload", "kyc", "आधार", "पैन"],
+            "loan_application": ["loan chahiye", "loan chahie", "loan apply", "mudra", "education loan", "personal loan", "लोन चाहिए", "ऋण चाहिए", "लोन"],
+            "product_recommendation": ["product", "recommend", "suggest", "bachat yojna", "scheme", "fd", "rd", "insurance", "बचत योजना"],
+            "balance_inquiry": ["balance", "kitna hai", "ketna", "balance kitna", "account balance", "paisa kitna", "बैलेंस कितना है", "बैलेंस", "शेष राशि"],
+            "transaction_history": ["transaction", "history", "statement", "last payment", "recent", "लेनदेन", "स्टेटमेंट"],
+            "spending_alert": ["spend", "spending", "budget", "overdraft", "expense", "खर्च"],
+            "churn_risk": ["close account", "band kar", "churn", "leave", "switch bank", "dusra bank", "खाता बंद"],
+            "fraud_report": ["fraud", "hack", "unauthorized", "galat", "galti", "card block", "unknown transaction", "कार्ड ब्लॉक करो", "कार्ड ब्लॉक", "धोखाधड़ी"],
+            "compliance_query": ["compliance", "policy", "rbi", "dpdp", "consent", "privacy", "गोपनीयता"],
+            "dormant_reactivation": ["dormant", "activate", "inactive", "use nahi", "long time", "सक्रिय"],
+            "human_escalation": ["human", "agent", "officer", "manager", "banda", "aadmi", "madad", "एजेंट", "अधिकारी", "मदद"]
         }
 
         # FIX H-6: Score ALL intents and pick the best match.
@@ -262,7 +262,6 @@ def _classify_intent_fallback(text: str, language: str) -> dict:
                 best_confidence = min(0.75 + 0.04 * (hits - 1), 0.97)
 
         entities = {"language": detected_lang}
-        import re
         amount_match = re.search(r'(?:Rs\.?\s?|\u20b9\s?)(\d[\d,]*)', text, re.IGNORECASE)
         if amount_match:
             entities["amount"] = int(amount_match.group(1).replace(",", ""))
