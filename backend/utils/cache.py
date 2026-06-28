@@ -10,27 +10,18 @@ from typing import Callable, Any, Optional
 # Both layers check TTL expiry before serving (FIX#8).
 # ────────────────────────────────────────────────────────────────
 
-LLM_RESPONSE_CACHE: dict = {}
-DEMO_CACHE: dict = {}
-
 # Secure cache directory — not world-readable /tmp
 cache_dir = os.environ.get("SARTHI_CACHE_DIR", os.path.join(os.path.expanduser("~"), ".sarthi_cache"))
+demo_cache_dir = os.path.join(cache_dir, "demo")
 
 
 def _read_cache(prompt_hash: str) -> tuple[bool, Any]:
-    if prompt_hash in LLM_RESPONSE_CACHE:
-        entry = LLM_RESPONSE_CACHE[prompt_hash]
-        if entry.get("expires_at", 0) > time.time():
-            return True, entry["result"]
-        del LLM_RESPONSE_CACHE[prompt_hash]
-    
     cache_file = os.path.join(cache_dir, f"{prompt_hash}.json")
     if os.path.exists(cache_file):
         try:
             with open(cache_file, 'r', encoding='utf-8') as f:
                 data = json.load(f)
             if data.get("expires_at", 0) > time.time():
-                LLM_RESPONSE_CACHE[prompt_hash] = data
                 return True, data["result"]
             os.remove(cache_file)
         except (json.JSONDecodeError, OSError):
@@ -43,7 +34,6 @@ def _write_cache(prompt_hash: str, result: Any, ttl_seconds: int) -> None:
         "expires_at": time.time() + ttl_seconds,
         "created_at": time.time()
     }
-    LLM_RESPONSE_CACHE[prompt_hash] = cache_entry
     try:
         os.makedirs(cache_dir, mode=0o700, exist_ok=True)
         cache_file = os.path.join(cache_dir, f"{prompt_hash}.json")
@@ -53,7 +43,7 @@ def _write_cache(prompt_hash: str, result: Any, ttl_seconds: int) -> None:
         pass
 
 def cached_llm_call(prompt_hash: str, real_fn: Callable, ttl_seconds: int = 3600) -> Any:
-    """Two-layer cache: memory (fastest) -> disk (survives restart) -> live call."""
+    """Shared disk cache: ensures consistent LLM responses across all uvicorn workers."""
     hit, val = _read_cache(prompt_hash)
     if hit: return val
     
@@ -71,25 +61,37 @@ async def async_cached_llm_call(prompt_hash: str, real_fn: Callable, ttl_seconds
     return result
 
 def cache_demo_state(flow_name: str, state: dict) -> None:
-    """Cache pre-computed demo states for live presentations."""
-    DEMO_CACHE[flow_name] = {
+    """Cache pre-computed demo states on disk for shared worker access."""
+    entry = {
         "state": state,
         "expires_at": time.time() + 86400  # 24 hours
     }
+    try:
+        os.makedirs(demo_cache_dir, mode=0o700, exist_ok=True)
+        cache_file = os.path.join(demo_cache_dir, f"{flow_name}.json")
+        with open(cache_file, 'w', encoding='utf-8') as f:
+            json.dump(entry, f, default=str)
+    except OSError:
+        pass
 
 
 def get_demo_state(flow_name: str) -> Optional[dict]:
-    """Retrieve cached demo state if not expired."""
-    entry = DEMO_CACHE.get(flow_name)
-    if entry and entry.get("expires_at", 0) > time.time():
-        return entry["state"]
+    """Retrieve cached demo state from disk if not expired."""
+    cache_file = os.path.join(demo_cache_dir, f"{flow_name}.json")
+    if os.path.exists(cache_file):
+        try:
+            with open(cache_file, 'r', encoding='utf-8') as f:
+                entry = json.load(f)
+            if entry.get("expires_at", 0) > time.time():
+                return entry["state"]
+            os.remove(cache_file)
+        except (json.JSONDecodeError, OSError):
+            os.remove(cache_file) if os.path.exists(cache_file) else None
     return None
 
 
 def pre_cache_demo_interactions():
-    """Pre-run all 8-10 demo interaction turns and cache them.
-    This prevents NIM rate-limit kills during live demos.
-    """
+    """Pre-run all 8-10 demo interaction turns and cache them."""
     demo_flows = [
         "account_open_marathi",
         "balance_inquiry_hindi",
@@ -104,22 +106,14 @@ def pre_cache_demo_interactions():
     ]
     
     for flow in demo_flows:
-        # In production: execute_demo_flow(flow) and cache
-        # For prototype: placeholder
         cache_demo_state(flow, {"flow": flow, "cached": True, "timestamp": time.time()})
     
     return len(demo_flows)
 
 
 def clear_cache() -> dict:
-    """Clear all caches. Returns statistics."""
-    mem_count = len(LLM_RESPONSE_CACHE)
+    """Clear all disk caches across workers. Returns statistics."""
     disk_count = 0
-    
-    LLM_RESPONSE_CACHE.clear()
-    DEMO_CACHE.clear()
-    
-    cache_dir = os.environ.get("SARTHI_CACHE_DIR", os.path.join(os.path.expanduser("~"), ".sarthi_cache"))
     if os.path.exists(cache_dir):
         for f in os.listdir(cache_dir):
             if f.endswith('.json'):
@@ -128,9 +122,17 @@ def clear_cache() -> dict:
                     disk_count += 1
                 except OSError:
                     pass
+    if os.path.exists(demo_cache_dir):
+        for f in os.listdir(demo_cache_dir):
+            if f.endswith('.json'):
+                try:
+                    os.remove(os.path.join(demo_cache_dir, f))
+                    disk_count += 1
+                except OSError:
+                    pass
     
     return {
-        "memory_entries_cleared": mem_count,
+        "memory_entries_cleared": 0,
         "disk_entries_cleared": disk_count,
         "status": "cleared"
     }
@@ -138,13 +140,15 @@ def clear_cache() -> dict:
 
 def get_cache_stats() -> dict:
     """Get cache statistics."""
-    cache_dir = os.environ.get("SARTHI_CACHE_DIR", os.path.join(os.path.expanduser("~"), ".sarthi_cache"))
     disk_entries = 0
+    demo_entries = 0
     if os.path.exists(cache_dir):
         disk_entries = len([f for f in os.listdir(cache_dir) if f.endswith('.json')])
+    if os.path.exists(demo_cache_dir):
+        demo_entries = len([f for f in os.listdir(demo_cache_dir) if f.endswith('.json')])
     
     return {
-        "memory_entries": len(LLM_RESPONSE_CACHE),
+        "memory_entries": 0,
         "disk_entries": disk_entries,
-        "demo_entries": len(DEMO_CACHE)
+        "demo_entries": demo_entries
     }

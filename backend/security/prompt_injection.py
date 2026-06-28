@@ -84,7 +84,11 @@ def calculate_risk_score(
         score += 0.3
     
     # Suspicious entities
-    if entities.get("amount", 0) > 500000:  # > 5 lakh
+    try:
+        amt_val = float(str(entities.get("amount", 0)).replace(",", ""))
+    except (ValueError, TypeError):
+        amt_val = 0.0
+    if amt_val > 500000:  # > 5 lakh
         score += 0.1
     if entities.get("new_beneficiary"):
         score += 0.1

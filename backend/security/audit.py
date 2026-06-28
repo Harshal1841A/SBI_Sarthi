@@ -3,8 +3,9 @@ load_dotenv()
 import hashlib
 import json
 import time
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 from datetime import datetime
+from contextlib import contextmanager
 
 # ────────────────────────────────────────────────────────────────
 # Immutable Audit Trail — RBI FREE-AI + DPDP Compliance
@@ -18,31 +19,80 @@ import os
 
 logger = structlog.get_logger("audit")
 
-_audit_chain: List[dict] = []
 _AUDIT_LOG_PATH = os.environ.get("SARTHI_AUDIT_LOG", os.path.join(os.path.expanduser("~"), ".sarthi_cache", "audit.jsonl"))
 
-def _load_audit_chain() -> None:
-    """Load existing audit records from disk on startup."""
-    global _audit_chain
+@contextmanager
+def _file_lock(path: str, timeout: float = 2.0):
+    lock_path = path + ".lock"
+    start_time = time.time()
+    fd = None
+    while time.time() - start_time < timeout:
+        if os.path.exists(lock_path):
+            try:
+                if time.time() - os.path.getmtime(lock_path) > 5.0:
+                    os.remove(lock_path)
+            except OSError:
+                pass
+        try:
+            fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            break
+        except OSError:
+            time.sleep(0.005)
+    if fd is None:
+        logger.warning("lock_acquire_timeout", path=path)
+    else:
+        os.close(fd)
+    try:
+        yield
+    finally:
+        if fd is not None and os.path.exists(lock_path):
+            try:
+                os.remove(lock_path)
+            except OSError:
+                pass
+
+def _get_chain_from_disk() -> List[dict]:
+    """Load existing audit records from disk dynamically for multi-worker consistency."""
     if os.path.exists(_AUDIT_LOG_PATH):
         try:
-            with open(_AUDIT_LOG_PATH, "r", encoding="utf-8") as f:
-                _audit_chain = [json.loads(line) for line in f if line.strip()]
+            with _file_lock(_AUDIT_LOG_PATH):
+                with open(_AUDIT_LOG_PATH, "r", encoding="utf-8") as f:
+                    return [json.loads(line) for line in f if line.strip()]
         except Exception as e:
             logger.error("Failed to load audit log", error=str(e))
-            _audit_chain = []
+    return []
+
+def _get_last_hash_from_disk() -> str:
+    """O(1) last hash lookup avoiding full log read."""
+    if not os.path.exists(_AUDIT_LOG_PATH):
+        return "0" * 64
+    try:
+        with _file_lock(_AUDIT_LOG_PATH):
+            with open(_AUDIT_LOG_PATH, "rb") as f:
+                try:
+                    f.seek(-2048, os.SEEK_END)
+                except OSError:
+                    f.seek(0)
+                lines = f.read().splitlines()
+                for line in reversed(lines):
+                    if line.strip():
+                        try:
+                            return json.loads(line.decode('utf-8'))["hash"]
+                        except Exception:
+                            continue
+    except Exception as e:
+        logger.error("Failed to read last audit hash", error=str(e))
+    return "0" * 64
 
 def _append_audit_to_disk(artifact: dict) -> None:
     """Append a single audit artifact to the persistent JSONL file."""
     try:
         os.makedirs(os.path.dirname(_AUDIT_LOG_PATH), mode=0o700, exist_ok=True)
-        with open(_AUDIT_LOG_PATH, "a", encoding="utf-8") as f:
-            f.write(json.dumps(artifact, default=str) + "\n")
+        with _file_lock(_AUDIT_LOG_PATH):
+            with open(_AUDIT_LOG_PATH, "a", encoding="utf-8") as f:
+                f.write(json.dumps(artifact, default=str) + "\n")
     except Exception as e:
         logger.error("Failed to persist audit artifact", error=str(e))
-
-# Load on module import
-_load_audit_chain()
 
 
 def create_audit_artifact(
@@ -53,21 +103,9 @@ def create_audit_artifact(
     state_snapshot: dict,
     prev_hash: Optional[str] = None
 ) -> dict:
-    """Create an immutable audit artifact for any significant event.
+    """Create an immutable audit artifact for any significant event."""
+    last_hash = prev_hash or _get_last_hash_from_disk()
     
-    Event types:
-    - "agent_decision": Any agent routing or action decision
-    - "hitl_interrupt": Human-in-the-loop triggered
-    - "hitl_approval": Human approved/rejected an action
-    - "consent_grant": Consent granted or rejected
-    - "consent_revoke": Consent revoked
-    - "shield_block": Shield agent blocked an action
-    - "shield_flag": Shield agent flagged but allowed
-    - "transaction_auth": Voice/transaction authorization
-    - "saga_compensation": Saga rollback executed
-    - "pii_scrub": PII scrubbing applied
-    - "prompt_injection": Injection attempt detected
-    """
     artifact = {
         "event_type": event_type,
         "session_id": session_id,
@@ -76,42 +114,40 @@ def create_audit_artifact(
         "state_snapshot": _sanitize_state(state_snapshot),
         "timestamp": time.time(),
         "timestamp_iso": datetime.utcnow().isoformat() + "Z",
-        "prev_hash": prev_hash or (_audit_chain[-1]["hash"] if _audit_chain else "0" * 64)
+        "prev_hash": last_hash
     }
     
     # SHA-256 hash
     payload = json.dumps({k: v for k, v in artifact.items() if k != "hash"}, sort_keys=True).encode('utf-8')
     artifact["hash"] = hashlib.sha256(payload).hexdigest()
     
-    _audit_chain.append(artifact)
     _append_audit_to_disk(artifact)
     logger.info("Audit event recorded", event_type=event_type, session_id=session_id, hash=artifact["hash"])
     return artifact
 
 
-def _sanitize_state(state: dict) -> dict:
-    """Remove sensitive fields from state snapshot for audit.
+def _sanitize_state(state: Any) -> Any:
+    """Remove sensitive fields recursively from state snapshot for audit.
     Aadhaar, PAN, and other PII are NEVER stored in audit logs.
     """
-    if not state:
-        return {}
-    
-    sensitive_keys = [
-        "aadhaar_number", "pan_number", "kyc_token", 
-        "account_id", "phone", "email", "dob"
-    ]
-    
-    sanitized = {}
-    for key, value in state.items():
-        if key in sensitive_keys:
-            sanitized[key] = "[REDACTED]"
-        elif key == "messages" and isinstance(value, list):
-            # Scrub PII from messages
-            sanitized[key] = [_scrub_message(m) for m in value[-5:]]  # Last 5 only
-        else:
-            sanitized[key] = value
-    
-    return sanitized
+    if isinstance(state, dict):
+        sensitive_keys = {
+            "aadhaar_number", "pan_number", "kyc_token", 
+            "account_id", "phone", "email", "dob", "password", "secret"
+        }
+        sanitized = {}
+        for key, value in state.items():
+            if key in sensitive_keys:
+                sanitized[key] = "[REDACTED]"
+            elif key == "messages" and isinstance(value, list):
+                # Scrub PII from messages
+                sanitized[key] = [_scrub_message(m) for m in value[-5:]]  # Last 5 only
+            else:
+                sanitized[key] = _sanitize_state(value)
+        return sanitized
+    elif isinstance(state, list):
+        return [_sanitize_state(item) for item in state]
+    return state
 
 
 def _scrub_message(msg: dict) -> dict:
@@ -130,7 +166,8 @@ def verify_audit_chain() -> bool:
     """Verify integrity of the entire audit chain.
     Returns False immediately on any broken link.
     """
-    for i, artifact in enumerate(_audit_chain):
+    chain = _get_chain_from_disk()
+    for i, artifact in enumerate(chain):
         # Reconstruct payload
         payload_dict = {k: v for k, v in artifact.items() if k != "hash"}
         payload_bytes = json.dumps(payload_dict, sort_keys=True).encode('utf-8')
@@ -141,7 +178,7 @@ def verify_audit_chain() -> bool:
         
         # Verify chain link
         if i > 0:
-            if artifact["prev_hash"] != _audit_chain[i - 1]["hash"]:
+            if artifact["prev_hash"] != chain[i - 1]["hash"]:
                 return False
         else:
             if artifact["prev_hash"] != "0" * 64:
@@ -158,7 +195,7 @@ def get_audit_logs(
     limit: int = 100
 ) -> List[dict]:
     """Query audit logs with filters."""
-    logs = _audit_chain
+    logs = _get_chain_from_disk()
     
     if session_id:
         logs = [l for l in logs if l["session_id"] == session_id]
@@ -174,17 +211,18 @@ def get_audit_logs(
 
 def get_audit_stats() -> dict:
     """Get summary statistics for the audit trail."""
-    if not _audit_chain:
+    chain = _get_chain_from_disk()
+    if not chain:
         return {"total_events": 0, "chain_integrity": True}
     
     event_counts = {}
-    for artifact in _audit_chain:
+    for artifact in chain:
         event_counts[artifact["event_type"]] = event_counts.get(artifact["event_type"], 0) + 1
     
     return {
-        "total_events": len(_audit_chain),
+        "total_events": len(chain),
         "chain_integrity": verify_audit_chain(),
         "event_breakdown": event_counts,
-        "first_event": _audit_chain[0]["timestamp_iso"],
-        "last_event": _audit_chain[-1]["timestamp_iso"]
+        "first_event": chain[0]["timestamp_iso"],
+        "last_event": chain[-1]["timestamp_iso"]
     }

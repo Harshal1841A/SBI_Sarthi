@@ -164,12 +164,9 @@ def build_graph() -> Any:
                 except RuntimeError:
                     loop = asyncio.new_event_loop()
                     asyncio.set_event_loop(loop)
-                orig = asyncio.get_running_loop
-                asyncio.get_running_loop = lambda: loop
-                try:
+                async def _create():
                     return cls(*a, **kw)
-                finally:
-                    asyncio.get_running_loop = orig
+                return loop.run_until_complete(_create())
 
     db_url = os.environ.get("DATABASE_URL")
     env = os.environ.get("SARTHI_ENV", "development")

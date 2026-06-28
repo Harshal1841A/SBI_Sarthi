@@ -1,15 +1,13 @@
 from dotenv import load_dotenv
 load_dotenv()
 import hashlib
-import hmac as hmac_module
+import hmac as _hmac
 import json
 import time
 import os
 from typing import List, Optional
 from datetime import datetime
-import structlog
-
-logger = structlog.get_logger()
+from contextlib import contextmanager
 
 # ────────────────────────────────────────────────────────────────
 # Hash-Chain Consent Artifacts — DPDP Act 2023 Compliance
@@ -119,8 +117,8 @@ def create_consent_artifact(
     payload = json.dumps({k: v for k, v in artifact.items() if k not in ("hash", "hmac_sig")}, sort_keys=True).encode('utf-8')
     artifact["hash"] = hashlib.sha256(payload).hexdigest()
     
-    # HMAC-SHA256 for tamper detection (FIX#3: use hmac_module, key is "hmac_sig")
-    artifact["hmac_sig"] = hmac_module.new(
+    # HMAC-SHA256 for tamper detection (FIX#3: use _hmac, key is "hmac_sig")
+    artifact["hmac_sig"] = _hmac.new(
         SERVER_SECRET,
         payload,
         hashlib.sha256
@@ -143,7 +141,7 @@ def verify_consent_artifact(artifact: dict) -> bool:
         return False
     
     # Verify HMAC
-    expected_hmac = hmac_module.new(
+    expected_hmac = _hmac.new(
         SERVER_SECRET,
         payload_bytes,
         hashlib.sha256
@@ -208,12 +206,46 @@ def _save_consent_chain(user_id: str, chain: List[dict]) -> None:
         logger.error("persist_consent_chain_failed", error=str(e))
 
 
+@contextmanager
+def _file_lock(path: str, timeout: float = 2.0):
+    lock_path = path + ".lock"
+    start_time = time.time()
+    fd = None
+    while time.time() - start_time < timeout:
+        if os.path.exists(lock_path):
+            try:
+                if time.time() - os.path.getmtime(lock_path) > 5.0:
+                    os.remove(lock_path)
+            except OSError:
+                pass
+        try:
+            fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            break
+        except OSError:
+            time.sleep(0.005)
+    if fd is None:
+        logger.warning("lock_acquire_timeout", path=path)
+    else:
+        os.close(fd)
+    try:
+        yield
+    finally:
+        if fd is not None and os.path.exists(lock_path):
+            try:
+                os.remove(lock_path)
+            except OSError:
+                pass
+
+
 def store_consent_artifact(artifact: dict) -> None:
-    """Store consent artifact in append-only chain (memory + disk)."""
+    """Store consent artifact in append-only chain (memory + disk) safely with file lock."""
     user_id = artifact["user_id"]
-    chain = _load_consent_chain(user_id)
-    chain.append(artifact)
-    _save_consent_chain(user_id, chain)
+    path = _get_consent_path(user_id)
+    os.makedirs(_CONSENT_STORE_DIR, mode=0o700, exist_ok=True)
+    with _file_lock(path):
+        chain = _load_consent_chain(user_id)
+        chain.append(artifact)
+        _save_consent_chain(user_id, chain)
 
 
 def get_consent_chain(user_id: str) -> List[dict]:

@@ -7,6 +7,7 @@ from utils.cache import cached_llm_call, async_cached_llm_call
 from nlp.nemotron_client import NemotronClient
 import asyncio
 import re
+import hashlib
 
 # ────────────────────────────────────────────────────────────────
 # Supervisor Node — Intent Router + Context Manager + Escalation
@@ -84,7 +85,7 @@ async def supervisor_node(state: SarthiState) -> dict:
     scrubbed = scrub_pii(user_text)
     
     # Intent classification (with caching/LLM)
-    prompt_hash = f"intent_{hash(scrubbed) & 0xFFFFFFFF}"
+    prompt_hash = f"intent_{hashlib.sha256(scrubbed.encode('utf-8')).hexdigest()[:16]}"
     
     # Try LLM first (with async cache)
     async def do_llm_call():
@@ -112,10 +113,15 @@ async def supervisor_node(state: SarthiState) -> dict:
         requires_hitl = True
         interrupt_reason = f"high_risk:{intent}"
         target_agent = "hitl_pause"
-    elif intent in ["loan_sanction", "fund_transfer"] and (entities.get("amount", 0) > 50000):
-        requires_hitl = True
-        interrupt_reason = "high_value_action"
-        target_agent = "hitl_pause"
+    elif intent in ["loan_sanction", "fund_transfer"]:
+        try:
+            amt_val = float(str(entities.get("amount", 0)).replace(",", ""))
+        except (ValueError, TypeError):
+            amt_val = 0.0
+        if amt_val > 50000:
+            requires_hitl = True
+            interrupt_reason = "high_value_action"
+            target_agent = "hitl_pause"
 
     # Priority overrides (Active flows)
     if state.get("interrupted"):

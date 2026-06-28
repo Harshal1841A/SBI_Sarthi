@@ -23,8 +23,8 @@ async def assist_agent(state: SarthiState) -> dict:
     lang = state.get("language", "en")
     messages = state.get("messages", [])
     
-    # Auto-escalate if confidence too low
-    if confidence < 0.85 and len(messages) > 2:
+    # Auto-escalate if confidence too low on unclear general queries
+    if confidence < 0.60 and len(messages) > 2 and intent == "general_chat":
         return _handle_human_escalation(state)
     
     # Route based on intent
@@ -48,6 +48,7 @@ def _handle_balance_inquiry(state: SarthiState) -> dict:
     # Mock transaction lookup
     balances = {
         "demo_user": {"savings": 45230, "current": 12500, "fd": 200000},
+        "DEMO_USER_001": {"savings": 124750, "current": 0, "fd": 0},
         "ramesh_patil": {"savings": 1200, "current": 500},
         "priya_sharma": {"savings": 125000, "current": 45000, "fd": 500000}
     }

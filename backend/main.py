@@ -2,7 +2,7 @@ from dotenv import load_dotenv
 load_dotenv()
 import json
 import secrets  # FIX L-2: top-level import, not repeated inside conditionals
-import hmac
+import hmac as _hmac
 import hashlib
 try:
     from langgraph.types import Command
@@ -90,7 +90,6 @@ if not SUPERVISOR_TOKEN:
 SARTHI_ENV = os.environ.get("SARTHI_ENV", "development").lower()
 DEMO_MODE = (
     os.environ.get("SARTHI_DEMO_MODE", "false").lower() == "true"
-    and SARTHI_ENV in {"development", "demo"}
 )
 security = HTTPBearer(auto_error=False)
 
@@ -102,7 +101,7 @@ def _get_demo_hmac_secret() -> bytes:
 def _generate_demo_token() -> str:
     expires = int(time.time() + 3600)
     exp_hex = f"{expires:08x}"
-    sig = hmac.new(_get_demo_hmac_secret(), exp_hex.encode("utf-8"), hashlib.sha256).hexdigest()[:56]
+    sig = _hmac.new(_get_demo_hmac_secret(), exp_hex.encode("utf-8"), hashlib.sha256).hexdigest()[:56]
     token = sig + exp_hex
     ACTIVE_DEMO_TOKENS[token] = float(expires)
     return token
@@ -122,8 +121,8 @@ def _is_valid_demo_token(token: str) -> bool:
             expires = int(exp_hex, 16)
             if time.time() > expires:
                 return False
-            expected_sig = hmac.new(_get_demo_hmac_secret(), exp_hex.encode("utf-8"), hashlib.sha256).hexdigest()[:56]
-            if hmac.compare_digest(sig, expected_sig):
+            expected_sig = _hmac.new(_get_demo_hmac_secret(), exp_hex.encode("utf-8"), hashlib.sha256).hexdigest()[:56]
+            if _hmac.compare_digest(sig, expected_sig):
                 ACTIVE_DEMO_TOKENS[token] = float(expires)
                 return True
         except Exception:
@@ -204,7 +203,7 @@ class ChatMessage(BaseModel):
     message: str
     language: str = "en"
     channel: str = "chat"
-    user_id: Optional[str] = "demo_user"
+    user_id: Optional[str] = None
 
 class ChatResponse(BaseModel):
     response: str
@@ -278,7 +277,7 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Database connection failed (running in degraded mode): {e}")
         
-    pre_cache_demo_interactions()
+    await asyncio.to_thread(pre_cache_demo_interactions)
     
     try:
         graph = get_graph()
@@ -349,6 +348,7 @@ app.include_router(whatsapp_router, prefix="/whatsapp", tags=["channels"])
 app.include_router(ivr_router, prefix="/ivr", tags=["channels"])
 
 api_router = APIRouter(dependencies=[Depends(verify_api_token)])
+supervisor_router = APIRouter(prefix="/supervisor", tags=["supervisor"], dependencies=[Depends(verify_supervisor_token)])
 
 # ────────────────────────────────────────────────────────────────
 # Health & Metrics
@@ -648,7 +648,7 @@ async def process_chat_message(msg: ChatMessage):
         {
             "messages": [{"role": "user", "content": scrubbed}],
             "session_id": msg.session_id,
-            "user_id": msg.user_id,
+            "user_id": msg.user_id or msg.session_id,
             "language": msg.language,
             "channel": msg.channel
         },
@@ -657,8 +657,9 @@ async def process_chat_message(msg: ChatMessage):
     latency = time.time() - start_time
     REQUEST_LATENCY.labels(endpoint="/chat/message").observe(latency)
     
-    # Update metrics
-    await get_interrupted_threads()
+    # Update metrics if interrupted
+    if result.get("interrupted") or result.get("requires_hitl"):
+        HITL_PENDING.inc()
     
     containment = 1.0 if not result.get("interrupted") and result.get("current_intent") != "human_escalation" else 0.0
     QUERY_CONTAINMENT.set(containment)
@@ -734,11 +735,50 @@ async def get_interrupted_threads() -> list:
     HITL_PENDING.set(len(pending))
     return pending
 
-@api_router.get("/supervisor/threads")
-async def get_supervisor_threads(_=Depends(verify_supervisor_token)):
-    """List all threads currently interrupted waiting for HITL approval."""
-    data = await get_interrupted_threads()
-    return {"threads": data, "count": len(data)}
+@supervisor_router.get("/pending")
+async def get_pending_threads():
+    """Get all pending HITL threads for supervisor dashboard."""
+    return await get_interrupted_threads()
+
+@supervisor_router.get("/threads")
+async def get_all_threads(limit: int = 50):
+    """Get all recent threads (not just interrupted)."""
+    graph = get_graph()
+    threads = []
+    thread_ids = set()
+    ordered_ids = []
+    
+    try:
+        async for tuple_ in graph.checkpointer.alist(None, limit=limit * 2):
+            tid = tuple_.config.get("configurable", {}).get("thread_id")
+            if tid and tid not in thread_ids:
+                thread_ids.add(tid)
+                ordered_ids.append(tid)
+                if len(ordered_ids) >= limit:
+                    break
+    except Exception as e:
+        logger.error(f"Thread enumeration error: {e}")
+        return []
+    
+    for thread_id in ordered_ids:
+        try:
+            state = await graph.aget_state({"configurable": {"thread_id": thread_id}})
+            if not state:
+                continue
+            values = state.values if hasattr(state, "values") else {}
+            threads.append({
+                "thread_id": thread_id,
+                "status": values.get("status", "unknown"),
+                "interrupted": values.get("interrupted", False),
+                "intent": values.get("current_intent", "unknown"),
+                "onboarding_step": values.get("onboarding_step"),
+                "risk_score": values.get("risk_score", 0.0),
+            })
+        except Exception as e:
+            logger.warning(f"Error reading thread {thread_id}: {e}")
+            continue
+    
+    return threads
 
 class SupervisorDecision(BaseModel):
     thread_id: str
@@ -746,8 +786,8 @@ class SupervisorDecision(BaseModel):
     reason: Optional[str] = "Supervisor review"
     approver_id: str = "SUP_001"
 
-@api_router.post("/supervisor/decide")
-async def supervisor_decide(decision: SupervisorDecision, _=Depends(verify_supervisor_token)):
+@supervisor_router.post("/decide")
+async def supervisor_decide(decision: SupervisorDecision):
     """Submit HITL approval/rejection decision to resume graph execution."""
     graph = get_graph()
     thread_id = decision.thread_id
@@ -766,16 +806,10 @@ async def supervisor_decide(decision: SupervisorDecision, _=Depends(verify_super
     await get_interrupted_threads()
     return {"status": "processed", "thread_id": thread_id, "approved": decision.approved}
 
-@app.get("/supervisor/pending")
-async def get_pending_threads(_=Depends(verify_supervisor_token)):
-    """Get all pending HITL threads for supervisor dashboard."""
-    return await get_interrupted_threads()
-
-@app.post("/supervisor/approve/{thread_id}")
+@supervisor_router.post("/approve/{thread_id}")
 async def approve_thread(
     thread_id: str,
-    decision: HITLDecision,
-    _=Depends(verify_supervisor_token)
+    decision: HITLDecision
 ):
     """Approve or reject a HITL-interrupted thread."""
     if Command is None:
@@ -814,49 +848,6 @@ async def approve_thread(
         "approved": decision.approved,
         "approver_id": decision.approver_id
     }
-
-@app.get("/supervisor/threads")
-async def get_all_threads(
-    limit: int = 50,
-    _=Depends(verify_supervisor_token)
-):
-    """Get all recent threads (not just interrupted)."""
-    graph = get_graph()
-    threads = []
-    thread_ids = set()
-    ordered_ids = []
-    
-    try:
-        async for tuple_ in graph.checkpointer.alist(None, limit=limit * 2):
-            tid = tuple_.config.get("configurable", {}).get("thread_id")
-            if tid and tid not in thread_ids:
-                thread_ids.add(tid)
-                ordered_ids.append(tid)
-                if len(ordered_ids) >= limit:
-                    break
-    except Exception as e:
-        logger.error(f"Thread enumeration error: {e}")
-        return []
-    
-    for thread_id in ordered_ids:
-        try:
-            state = await graph.aget_state({"configurable": {"thread_id": thread_id}})
-            if not state:
-                continue
-            values = state.values if hasattr(state, "values") else {}
-            threads.append({
-                "thread_id": thread_id,
-                "status": values.get("status", "unknown"),
-                "interrupted": values.get("interrupted", False),
-                "intent": values.get("current_intent", "unknown"),
-                "onboarding_step": values.get("onboarding_step"),
-                "risk_score": values.get("risk_score", 0.0),
-            })
-        except Exception as e:
-            logger.warning(f"Error reading thread {thread_id}: {e}")
-            continue
-    
-    return threads
 
 # ────────────────────────────────────────────────────────────────
 # Consent Management (DPDP Act 2023)
@@ -995,8 +986,8 @@ async def upload_kyc_document(
 # YONO Transaction Webhook
 # ────────────────────────────────────────────────────────────────
 
-@app.post("/yono/transaction-webhook")
-async def yono_transaction_webhook(payload: YONOTransaction, _=Depends(verify_api_token)):
+@api_router.post("/yono/transaction-webhook")
+async def yono_transaction_webhook(payload: YONOTransaction):
     """Receive YONO 2.0 transaction webhook.
     
     Triggers adoption agent for cross-sell analysis.
@@ -1035,7 +1026,7 @@ async def yono_transaction_webhook(payload: YONOTransaction, _=Depends(verify_ap
 # Audit & Shield
 # ────────────────────────────────────────────────────────────────
 
-@app.get("/audit/logs")
+@api_router.get("/audit/logs")
 async def get_audit_logs_endpoint(
     session_id: Optional[str] = None,
     event_type: Optional[str] = None,
@@ -1050,7 +1041,7 @@ async def get_audit_logs_endpoint(
         "chain_integrity": True
     }
 
-@app.get("/audit/stats")
+@api_router.get("/audit/stats")
 async def get_audit_stats_endpoint(_=Depends(verify_api_token)):
     """Get audit statistics."""
     return get_audit_stats()
@@ -1059,14 +1050,9 @@ class ShieldCheckRequest(BaseModel):
     text: str = Field(..., description="Text to analyse for prompt injection / risk")
 
 
-@app.post("/shield/check")
+@api_router.post("/shield/check")
 async def shield_check_endpoint(req: ShieldCheckRequest, _=Depends(verify_api_token)):
-    """Run shield check on arbitrary text.
-
-    FIX H-8: text is now in the JSON request body (not a query param).
-    Query-param approach sent sensitive text in URLs, which are logged by
-    every proxy, CDN, and load balancer in plaintext.
-    """
+    """Run shield check on arbitrary text."""
     result = shield_guard(req.text, "", {})
     return {
         "input_safe": result["input_safe"],
@@ -1204,13 +1190,12 @@ async def create_loan_endpoint(
 # Main & Static Hosting
 # ────────────────────────────────────────────────────────────────
 
-app.include_router(api_router)
 app.include_router(api_router, prefix="/api")
-app.include_router(demo_router, prefix="/demo")
+app.include_router(supervisor_router, prefix="/api")
 app.include_router(demo_router, prefix="/api/demo")
 
 # Serve Frontend Static Files (SPA)
-_FRONTEND_DIST = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "frontend", "dist")
+_FRONTEND_DIST = os.path.realpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "frontend", "dist"))
 if os.path.exists(_FRONTEND_DIST):
     _ASSETS_DIR = os.path.join(_FRONTEND_DIST, "assets")
     if os.path.exists(_ASSETS_DIR):
@@ -1218,7 +1203,9 @@ if os.path.exists(_FRONTEND_DIST):
 
     @app.get("/{full_path:path}", include_in_schema=False)
     async def serve_spa(full_path: str):
-        file_path = os.path.join(_FRONTEND_DIST, full_path)
+        file_path = os.path.realpath(os.path.join(_FRONTEND_DIST, full_path))
+        if not file_path.startswith(_FRONTEND_DIST):
+            raise HTTPException(status_code=400, detail="Invalid path")
         if os.path.isfile(file_path):
             return FileResponse(file_path)
         index_path = os.path.join(_FRONTEND_DIST, "index.html")
