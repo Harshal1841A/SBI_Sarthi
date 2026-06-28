@@ -1054,14 +1054,17 @@ async def shield_check_endpoint(req: ShieldCheckRequest, _=Depends(verify_api_to
 
 
 
-@app.get("/demo/supervisor/pending")
+demo_router = APIRouter()
+
+
+@demo_router.get("/supervisor/pending")
 async def demo_supervisor_pending(_=Depends(verify_api_token)):
     """Read-only HITL queue for demo mode. No approval capability."""
     threads = await get_interrupted_threads()
     return {"pending": threads, "note": "Approval requires SBI officer credentials"}
 
 
-@app.get("/demo/token")
+@demo_router.get("/token")
 async def get_demo_token():
     """Return a scoped demo token for stakeholder/investor access.
 
@@ -1094,7 +1097,7 @@ async def get_demo_token():
     }
 
 
-@app.post("/demo/seed")
+@demo_router.post("/seed")
 async def seed_demo_data(_=Depends(verify_api_token)):
     """Seed the system with demo data for stakeholder presentations.
     
@@ -1176,6 +1179,8 @@ async def create_loan_endpoint(
 
 app.include_router(api_router)
 app.include_router(api_router, prefix="/api")
+app.include_router(demo_router, prefix="/demo")
+app.include_router(demo_router, prefix="/api/demo")
 
 # Serve Frontend Static Files (SPA)
 _FRONTEND_DIST = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "frontend", "dist")
