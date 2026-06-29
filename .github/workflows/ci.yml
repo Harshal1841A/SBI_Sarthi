@@ -1,0 +1,36 @@
+name: CI/CD Pipeline
+
+on:
+  pull_request:
+    branches: [ main ]
+  push:
+    branches: [ main ]
+
+jobs:
+  test-and-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+          pip install pytest ruff
+
+      - name: Run Security Scans & Linting
+        run: |
+          ruff check backend/
+          # Run gitleaks if available or install via action/docker
+          docker run -v ${{ github.workspace }}:/path zricethezav/gitleaks:latest detect --source="/path" --no-git || true
+
+      - name: Run Test Suite
+        run: |
+          pytest

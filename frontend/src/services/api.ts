@@ -1,6 +1,9 @@
 /// <reference types="vite/client" />
 import axios from 'axios';
 import { ChatResponse, HITLThread, HITLDecision, ConsentArtifact, SystemStats } from '../types';
+import { migrateStorageOnLoad } from '../utils/storage';
+
+migrateStorageOnLoad();
 
 // FIX L-6: Honour VITE_API_BASE_URL if set (useful when Vite proxy is NOT available,
 // e.g. direct connections in Electron or server-to-server dev).
@@ -9,16 +12,16 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL
   ? `${import.meta.env.VITE_API_BASE_URL}/api`
   : '/api';
 
-// Read token from sessionStorage (preferred, per BUG-16 migration) with localStorage fallback
+// Read token from sessionStorage (preferred, per migration)
 // VITE_SARTHI_API_TOKEN matches the backend SARTHI_API_TOKEN naming convention
 const getToken = (): string => {
-  return sessionStorage.getItem('sarthi_token') || localStorage.getItem('sarthi_token') || import.meta.env.VITE_SARTHI_API_TOKEN || import.meta.env.VITE_SARTHI_TOKEN || '';
+  return sessionStorage.getItem('sarthi_token') || import.meta.env.VITE_SARTHI_API_TOKEN || import.meta.env.VITE_SARTHI_TOKEN || '';
 };
 
 // Supervisor token is fetched from a secure backend endpoint or login flow.
 // NEVER embed supervisor tokens in client-side env vars.
 const getSupervisorToken = (): string => {
-  return sessionStorage.getItem('sarthi_supervisor_token') || localStorage.getItem('sarthi_supervisor_token') || import.meta.env.VITE_SARTHI_SUPERVISOR_TOKEN || '';
+  return sessionStorage.getItem('sarthi_supervisor_token') || import.meta.env.VITE_SARTHI_SUPERVISOR_TOKEN || '';
 };
 
 const api = axios.create({
@@ -56,8 +59,7 @@ export const chatApi = {
 
 export const supervisorApi = {
   getPendingThreads: async (): Promise<HITLThread[]> => {
-    // Check sessionStorage first (migrated), then localStorage (legacy)
-    const isDemo = sessionStorage.getItem('sarthi_demo_active') === 'true' || localStorage.getItem('sarthi_demo_active') === 'true';
+    const isDemo = sessionStorage.getItem('sarthi_demo_active') === 'true';
     if (isDemo) {
       const token = getToken();
       const response = await axios.get(`${API_BASE}/demo/supervisor/pending`, {

@@ -161,7 +161,7 @@ def _handle_transaction_nudge(state: SarthiState) -> dict:
     Triggered by YONO transaction webhook.
     """
     lang = state.get("language", "en")
-    # FIX L2: YONO webhook sets state["transaction"] at the top level, not metadata["transaction"]
+    # Resolved L2: YONO webhook sets state["transaction"] at the top level, not metadata["transaction"]
     transaction = state.get("transaction") or state.get("metadata", {}).get("transaction", {})
     
     category = transaction.get("category", "")

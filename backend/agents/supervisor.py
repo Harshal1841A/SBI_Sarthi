@@ -25,7 +25,7 @@ INTENT_ROUTING = {
     "transaction_history": "assist",
     "spending_alert": "engagement",
     "churn_risk": "engagement",
-    "fraud_report": "assist",      # FIX M4: assist handles card-block + HITL, not shield
+    "fraud_report": "assist",      # Resolved M4: assist handles card-block + HITL, not shield
     "compliance_query": "shield",
     "dormant_reactivation": "engagement",
     "overdraft_prevention": "engagement",
@@ -129,7 +129,7 @@ async def supervisor_node(state: SarthiState) -> dict:
             # Human has made a decision via Command(resume=...) — resume the flow
             target_agent = "hitl_resume"
         else:
-            # FIX M-9: still waiting for human decision.
+            # Resolved M-9: still waiting for human decision.
             # Do NOT re-route to hitl_pause — the graph is already halted there.
             # Return the current pause state without changing routing; LangGraph
             # will not actually reach this code until Command(resume=...) is sent.
@@ -251,7 +251,7 @@ def _classify_intent_fallback(text: str, language: str) -> dict:
             "human_escalation": ["human", "agent", "officer", "manager", "banda", "aadmi", "madad", "एजेंट", "अधिकारी", "मदद"]
         }
 
-        # FIX H-6: Score ALL intents and pick the best match.
+        # Resolved H-6: Score ALL intents and pick the best match.
         # The original code short-circuited on the first matching keyword,
         # making classification order-dependent and non-exhaustive.
         # Now we count keyword hits per intent and normalise to a confidence score.

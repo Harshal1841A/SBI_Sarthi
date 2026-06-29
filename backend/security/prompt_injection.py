@@ -1,4 +1,5 @@
 import re
+import base64
 from typing import Tuple, List, Dict
 
 # ────────────────────────────────────────────────────────────────
@@ -8,7 +9,7 @@ from typing import Tuple, List, Dict
 # ────────────────────────────────────────────────────────────────
 
 PROMPT_INJECTION_PATTERNS = [
-    re.compile(r'ignore\s+(previous|above|earlier|all)', re.IGNORECASE),
+    re.compile(r'ignore\s+(previous|above|earlier|all|purane)', re.IGNORECASE),
     re.compile(r'forget\s+(your|the)\s+instructions', re.IGNORECASE),
     re.compile(r'you\s+are\s+now\s+', re.IGNORECASE),
     re.compile(r'system\s+prompt', re.IGNORECASE),
@@ -16,7 +17,7 @@ PROMPT_INJECTION_PATTERNS = [
     re.compile(r'DAN\s*\(|DARK\s*AI', re.IGNORECASE),
     re.compile(r'ignore\s+all\s+previous\s+instructions', re.IGNORECASE),
     re.compile(r'disregard\s+(previous|above|earlier)', re.IGNORECASE),
-    re.compile(r'override\s+(previous|default|system)', re.IGNORECASE),
+    re.compile(r'override\s+(previous|default|system|safety)', re.IGNORECASE),
     re.compile(r'pretend\s+to\s+be', re.IGNORECASE),
     re.compile(r'act\s+as\s+if\s+you\s+are', re.IGNORECASE),
     re.compile(r'simulate\s+being', re.IGNORECASE),
@@ -25,11 +26,21 @@ PROMPT_INJECTION_PATTERNS = [
     re.compile(r'\bDAN\b', re.IGNORECASE),
     re.compile(r'hack\s+(the|this|system)', re.IGNORECASE),
     re.compile(r'extract\s+(all|every)\s+data', re.IGNORECASE),
-    re.compile(r'dump\s+(database|memory|context)', re.IGNORECASE),
+    re.compile(r'dump\s+(database|memory|context|system|initialization)', re.IGNORECASE),
     re.compile(r'leak\s+(prompt|instructions|system)', re.IGNORECASE),
     re.compile(r'transfer\s+all\s+(money|funds)', re.IGNORECASE),
     re.compile(r'wire\s+transfer\s+to', re.IGNORECASE),
     re.compile(r'send\s+all\s+money\s+to', re.IGNORECASE),
+    # Indirect prompt injection / system prompt leakage
+    re.compile(r'(repeat|output|show|display|reveal|dump|leak)\s+(the\s+|your\s+)?(above|previous|initial|hidden|internal)?\s*(system\s+)?(prompt|instructions|rules|configuration|text)', re.IGNORECASE),
+    re.compile(r'SYSTEM\s*:\s*(Override|Ignore|Forget)', re.IGNORECASE),
+    # Multi-language vectors (Hindi, Hinglish, Marathi)
+    re.compile(r'bhool\s+jao', re.IGNORECASE),
+    re.compile(r'ignore\s+karo', re.IGNORECASE),
+    re.compile(r'निर्देश\s+भूल\s+जाओ'),
+    re.compile(r'सिस्टम\s+प्रॉम्प्ट'),
+    re.compile(r'सूचना\s+विसरा'),
+    re.compile(r'गुप्त\s+माहिती'),
 ]
 
 # High-risk banking intents that trigger additional fact-checking
@@ -44,6 +55,29 @@ HIGH_RISK_INTENTS = [
 ]
 
 
+def _normalize_for_detection(text: str) -> List[str]:
+    texts = [text]
+    # Strip zero-width characters and formatting markers
+    clean = re.sub(r'[\u200b\u200c\u200d\ufeff]', '', text)
+    if clean != text:
+        texts.append(clean)
+    # Homoglyphs and leetspeak normalization
+    homo_map = str.maketrans({'о': 'o', 'а': 'a', 'е': 'e', 'і': 'i', '0': 'o', '1': 'i', '3': 'e', '4': 'a'})
+    leet = clean.lower().translate(homo_map)
+    if leet != clean.lower():
+        texts.append(leet)
+    # Check for Base64 encoded strings
+    for word in text.split():
+        if len(word) >= 16 and (word.endswith('=') or re.match(r'^[A-Za-z0-9+/]+$', word)):
+            try:
+                dec = base64.b64decode(word).decode('utf-8', errors='ignore')
+                if len(dec) > 5:
+                    texts.append(dec)
+            except Exception:
+                pass
+    return texts
+
+
 def detect_prompt_injection(text: str) -> Tuple[bool, List[str]]:
     """Detect prompt injection attempts in user input.
     
@@ -51,10 +85,12 @@ def detect_prompt_injection(text: str) -> Tuple[bool, List[str]]:
         (is_injection, list_of_matched_patterns)
     """
     flags = []
-    for pattern in PROMPT_INJECTION_PATTERNS:
-        match = pattern.search(text)
-        if match:
-            flags.append(match.group(0))
+    candidates = _normalize_for_detection(text)
+    for cand in candidates:
+        for pattern in PROMPT_INJECTION_PATTERNS:
+            match = pattern.search(cand)
+            if match:
+                flags.append(match.group(0))
     return len(flags) > 0, flags
 
 

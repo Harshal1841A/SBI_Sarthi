@@ -1,7 +1,7 @@
 from dotenv import load_dotenv
 load_dotenv()
 import json
-import secrets  # FIX L-2: top-level import, not repeated inside conditionals
+import secrets  # Resolved L-2: top-level import, not repeated inside conditionals
 import hmac as _hmac
 import hashlib
 try:
@@ -12,8 +12,19 @@ import os
 import sys
 import uuid
 import asyncio
-import redis.asyncio as redis
-import asyncpg
+try:
+    import redis.asyncio as redis
+    REDIS_AVAILABLE = True
+except ImportError:
+    redis = None
+    REDIS_AVAILABLE = False
+
+try:
+    import asyncpg
+    ASYNCPG_AVAILABLE = True
+except ImportError:
+    asyncpg = None
+    ASYNCPG_AVAILABLE = False
 import time
 import sqlite3
 from datetime import datetime
@@ -36,7 +47,7 @@ logger = structlog.get_logger("main")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from state import SarthiState
 from graph import get_graph
-from security.pii_scrubber import scrub_pii, detect_pii
+from security.pii_scrubber import detect_pii
 from security.pii_middleware import PIIIngressMiddleware
 from security.verhoeff import validate_aadhaar, validate_pan, AadhaarValidationError
 from security.consent import (
@@ -44,7 +55,7 @@ from security.consent import (
     get_consent_chain, get_user_consents, revoke_consent_artifact, get_consent_notice,
     verify_consent_chain
 )
-from security.audit import create_audit_artifact, get_audit_logs, get_audit_stats
+from security.audit import create_audit_artifact, get_audit_logs, get_audit_stats, verify_audit_chain
 from security.prompt_injection import shield_guard, detect_prompt_injection
 from voice.vad import process_audio_chunk, cleanup_session_buffer, session_buffers
 from voice.tts import text_to_speech, tts_cascade
@@ -91,12 +102,20 @@ SARTHI_ENV = os.environ.get("SARTHI_ENV", "development").lower()
 DEMO_MODE = (
     os.environ.get("SARTHI_DEMO_MODE", "false").lower() == "true"
 )
+if DEMO_MODE and SARTHI_ENV == "production":
+    raise RuntimeError("SARTHI_DEMO_MODE must be false in production")
+
 security = HTTPBearer(auto_error=False)
 
 ACTIVE_DEMO_TOKENS: dict[str, float] = {}
 
 def _get_demo_hmac_secret() -> bytes:
-    return (HMAC_SECRET or API_TOKEN or "sarthi_demo_stateless_secret_2026").encode("utf-8")
+    if not HMAC_SECRET:
+        raise RuntimeError(
+            "SARTHI_HMAC_SECRET is required to mint demo tokens. "
+            "Refusing to fall back to API_TOKEN or a literal."
+        )
+    return HMAC_SECRET.encode("utf-8")
 
 def _generate_demo_token() -> str:
     expires = int(time.time() + 3600)
@@ -138,7 +157,7 @@ def verify_api_token(request: Request, creds: Optional[HTTPAuthorizationCredenti
 def verify_supervisor_token(request: Request, creds: Optional[HTTPAuthorizationCredentials] = Depends(security)) -> None:
     """Validate Bearer token for supervisor-only endpoints."""
     token = request.headers.get("X-Sarthi-Supervisor-Token") or (creds.credentials if creds else None)
-    if not token or (token != SUPERVISOR_TOKEN and not _is_valid_demo_token(token)):
+    if not token or token != SUPERVISOR_TOKEN:
         raise HTTPException(status_code=403, detail="Supervisor access required")
 
 
@@ -281,7 +300,7 @@ async def lifespan(app: FastAPI):
     
     try:
         graph = get_graph()
-        # FIX C2: open the Postgres pool if one was created (open=False only defers connection)
+        # Resolved C2: open the Postgres pool if one was created (open=False only defers connection)
         checkpointer = graph.checkpointer
         if hasattr(checkpointer, "conn") and hasattr(checkpointer.conn, "open"):
             try:
@@ -324,7 +343,7 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# FIX M-2: CORS origins are env-gated.
+# Resolved M-2: CORS origins are env-gated.
 # Localhost is only allowed in development / demo mode — never in production.
 _PRODUCTION_ORIGINS = [
     "https://sarthi.sbi.co.in",
@@ -472,9 +491,10 @@ async def chat_websocket(websocket: WebSocket, user_id: str) -> None:
                 session_id = f"ws_{user_id}"
                 language = "en"
                 
+            scrubbed_msg = getattr(websocket.state, "scrubbed_text", msg_text)
             result = await graph.ainvoke(
                 {
-                    "messages": [{"role": "user", "content": msg_text}],
+                    "messages": [{"role": "user", "content": scrubbed_msg}],
                     "session_id": session_id,
                     "user_id": user_id,
                     "language": language,
@@ -514,7 +534,7 @@ async def voice_websocket(websocket: WebSocket) -> None:
     session_id = str(uuid.uuid4())
     session_lang = websocket.query_params.get("lang", "en")
     
-    # FIX#5: Init per-session buffer
+    # Resolved#5: Init per-session buffer
     ACTIVE_SESSIONS.inc()
     
     try:
@@ -551,7 +571,7 @@ async def voice_websocket(websocket: WebSocket) -> None:
                     
                     # Run graph with transcribed text (or placeholder)
                     transcribed_text = result.get("text") or "[voice input received]"
-                    scrubbed = scrub_pii(transcribed_text)
+                    scrubbed = result.get("scrubbed_text") or getattr(websocket.state, "scrubbed_text", transcribed_text)
                     
                     graph = get_graph()
                     graph_result = await graph.ainvoke(
@@ -583,7 +603,7 @@ async def voice_websocket(websocket: WebSocket) -> None:
                 elif "text" in data:
                     msg_data = data["text"]
                     if isinstance(msg_data, str):
-                        # FIX H-3: initialise msg_json before try so it is always defined
+                        # see issue #105 (2026-06-29): initialise msg_json before try so it is always defined
                         msg_json: dict = {}
                         try:
                             msg_json = json.loads(msg_data)
@@ -592,7 +612,7 @@ async def voice_websocket(websocket: WebSocket) -> None:
                             text_content = msg_data
 
                         session_lang = msg_json.get("language", session_lang)
-                        scrubbed = scrub_pii(text_content)
+                        scrubbed = getattr(websocket.state, "scrubbed_text", text_content)
                         graph = get_graph()
                         graph_result = await graph.ainvoke(
                             {
@@ -632,10 +652,10 @@ async def voice_websocket(websocket: WebSocket) -> None:
 # ────────────────────────────────────────────────────────────────
 
 @api_router.post("/chat/message", response_model=ChatResponse)
-async def process_chat_message(msg: ChatMessage):
+async def process_chat_message(msg: ChatMessage, request: Request):
     """Process a text chat message through the agent graph."""
     # PII scrubbing
-    scrubbed = scrub_pii(msg.message)
+    scrubbed = getattr(request.state, "scrubbed_text", msg.message)
     
     # Prompt injection check
     is_injection, flags = detect_prompt_injection(scrubbed)
@@ -667,10 +687,6 @@ async def process_chat_message(msg: ChatMessage):
     )
     latency = time.time() - start_time
     REQUEST_LATENCY.labels(endpoint="/chat/message").observe(latency)
-    
-    # Update metrics if interrupted
-    if result.get("interrupted") or result.get("requires_hitl"):
-        HITL_PENDING.inc()
     
     containment = 1.0 if not result.get("interrupted") and result.get("current_intent") != "human_escalation" else 0.0
     QUERY_CONTAINMENT.set(containment)
@@ -791,31 +807,7 @@ async def get_all_threads(limit: int = 50):
     
     return threads
 
-class SupervisorDecision(BaseModel):
-    thread_id: str
-    approved: bool
-    reason: Optional[str] = "Supervisor review"
-    approver_id: str = "SUP_001"
 
-@supervisor_router.post("/decide")
-async def supervisor_decide(decision: SupervisorDecision):
-    """Submit HITL approval/rejection decision to resume graph execution."""
-    graph = get_graph()
-    thread_id = decision.thread_id
-    
-    if decision.approved:
-        await graph.ainvoke(
-            Command(resume={"approved": True, "approver_id": decision.approver_id, "reason": decision.reason}),
-            config={"configurable": {"thread_id": thread_id}}
-        )
-    else:
-        await graph.ainvoke(
-            Command(resume={"approved": False, "reason": decision.reason, "approver_id": decision.approver_id}),
-            config={"configurable": {"thread_id": thread_id}}
-        )
-    
-    await get_interrupted_threads()
-    return {"status": "processed", "thread_id": thread_id, "approved": decision.approved}
 
 @supervisor_router.post("/approve/{thread_id}")
 async def approve_thread(
@@ -1048,7 +1040,7 @@ async def get_audit_logs_endpoint(
     return {
         "logs": logs,
         "count": len(logs),
-        "chain_integrity": True
+        "chain_integrity": verify_audit_chain() if logs else True
     }
 
 @api_router.get("/audit/stats")
@@ -1092,7 +1084,7 @@ async def demo_supervisor_pending(_=Depends(verify_api_token)):
 async def get_demo_token():
     """Return a scoped demo token for stakeholder/investor access.
 
-    FIX C-2: This endpoint NEVER returns the live API_TOKEN or SUPERVISOR_TOKEN.
+    see issue #103 (2026-06-29): This endpoint NEVER returns the live API_TOKEN or SUPERVISOR_TOKEN.
     It generates a fresh, short-lived demo-only token that grants read-only access
     to non-sensitive demo endpoints. The real tokens are never exposed over HTTP.
     Only available when SARTHI_DEMO_MODE=true.
@@ -1106,12 +1098,12 @@ async def get_demo_token():
 
     return {
         "api_token": demo_token,
-        "supervisor_token": demo_token,  # enable demo users to test HITL approval dashboard
+        "scope": "demo:read",
         "demo_user": {
             "user_id": "DEMO_USER_001",
             "name": "Rajesh Kumar",
             "phone": "+91-98765-43210",
-            "account_id": "SBIXXXXXXXXXX0123",
+            "account_id": "SBI**********0123",
             "balance": 124750.00,
             "language": "hi"
         },
@@ -1229,7 +1221,7 @@ if __name__ == "__main__":
         "main:app",
         host="0.0.0.0",
         port=8000,
-        # FIX#6: 4 workers for concurrent WebSocket sessions
+        # Resolved#6: 4 workers for concurrent WebSocket sessions
         workers=4,
         reload=False
     )

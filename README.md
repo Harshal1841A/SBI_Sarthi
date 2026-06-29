@@ -1,94 +1,86 @@
----
-title: Sarthi AI - Banking Supervisor & Assistant
-emoji: 🏦
-colorFrom: blue
-colorTo: indigo
-sdk: docker
-app_port: 7860
-pinned: false
----
+# Sarthi AI — Multi-Agent Banking Orchestration Platform
 
-# Sarthi AI — Advanced Multi-Agent Banking Platform for State Bank of India (SBI)
-
-**Sarthi** is an enterprise-grade, autonomous multi-agent banking orchestration platform built to power State Bank of India's next-generation customer experience. Engineered with strict adherence to Indian Banking DPDP Act and RBI data localisation guidelines, Sarthi combines low-latency vernacular assistance with deterministic hierarchical AI agent routing and Human-In-The-Loop (HITL) supervisor breakpoints.
+Sarthi is an enterprise banking assistant and routing platform built for customer service workflows. It routes user inquiries across specialized domain agents, enforcing data privacy guidelines and Human-In-The-Loop (HITL) approval gates for sensitive or high-value transactions.
 
 ---
 
-## 🏗️ Core Architecture & Topology
+## Core Architecture & Topology
 
-Sarthi is orchestrated via a deterministic **LangGraph StateGraph** backed by persistent checkpointing. The system operates asynchronously across specialized domain sub-agents:
+Sarthi manages conversational state using LangGraph graph execution workflows. Requests are pre-processed by security layers before being classified and sent to domain agents.
 
 ```mermaid
 graph TD
     User[User Input / Voice ASR] --> Shield[Shield Pre-Filter & PII Scrubber]
-    Shield --> Supervisor[Supervisor Node Router]
+    Shield --> Supervisor[Supervisor Router Node]
     
     Supervisor -->|Account / KYC / Loan| Acquisition[Acquisition Agent]
     Supervisor -->|Products / Advisory| Adoption[Adoption Agent]
     Supervisor -->|Support / Balance| Assist[Assist Agent]
     Supervisor -->|Alerts / Churn| Engagement[Engagement Agent]
     
-    Acquisition -->|High Risk / >₹50k| HITL[HITL Pause Node]
+    Acquisition -->|High Risk / >₹50k| HITL[HITL Pause Gate]
     Assist -->|Card Block / Fraud| HITL
     
     HITL -->|Approved| Resume[HITL Resume Node]
-    HITL -->|Rejected| Compensation[Compensation / Saga Rollback]
+    HITL -->|Rejected| Compensation[Compensation Rollback]
     
     Resume --> Target[Target Agent Flow]
 ```
 
 ### Domain Agents
-1. **Supervisor (`supervisor.py`)**: Central intent classifier and router. Evaluates risk scores and routes turns deterministically across domain agents.
-2. **Shield (`shield.py` & `pii_middleware.py`)**: Security guardrail responsible for prompt injection blocking and 100% non-recoverable PII scrubbing (Aadhaar, PAN, Phone, Account numbers) prior to any external processing per RBI guidelines.
-3. **Acquisition (`acquisition.py`)**: Manages customer onboarding, e-KYC, Video-KYC verification workflows, and loan sanction requests.
-4. **Adoption (`adoption.py`)**: Drives product recommendations, savings schemes, and cross-selling advisory.
-5. **Assist (`assist.py`)**: Handles FAQs, account balances, transaction inquiries, and general support.
-6. **Engagement (`engagement.py`)**: Manages proactive spending alerts, dormant account reactivation, and churn risk mitigation.
-7. **Compensation (`compensation.py`)**: Implements the Saga pattern for financial redressal, chargebacks, and rollback workflows when actions are cancelled or rejected.
-8. **HITL (`hitl.py`)**: Human-In-The-Loop breakpoint that halts graph execution at persistent checkpoints for high-value (>₹50,000) or high-risk operations until an authorized SBI officer approves.
+1. **Supervisor (`supervisor.py`)**: Analyzes user intent and assigns task execution to specific domain sub-agents.
+2. **Shield (`shield.py` & `pii_middleware.py`)**: Filters potential prompt injections and redacts Personally Identifiable Information (PII) such as Aadhaar, PAN, phone numbers, and account numbers prior to LLM processing.
+3. **Acquisition (`acquisition.py`)**: Handles customer onboarding, KYC workflows, and loan application inquiries.
+4. **Adoption (`adoption.py`)**: Provides guidance on banking schemes and financial products.
+5. **Assist (`assist.py`)**: Handles FAQs, account balances, transaction inquiries, and customer support requests.
+6. **Engagement (`engagement.py`)**: Manages notifications, proactive alerts, and follow-ups.
+7. **Compensation (`compensation.py`)**: Executes rollback and redressal operations when financial requests are cancelled or rejected.
+8. **HITL (`hitl.py`)**: Halts execution at persistent checkpoints for transactions requiring human officer verification.
 
 ---
 
-## 🛠️ Brutal Transparency & Tiered Fallback Architecture
+## Technical Features & Fallbacks
 
-To ensure 100% uptime in demo environments and local executions without requiring expensive live API keys, Sarthi implements a brutal, fault-tolerant fallback architecture across all layers:
+### Storage & Checkpointing
+- **Production Mode**: Requires PostgreSQL connection via `DATABASE_URL` for persistent graph checkpoints and Redis (`REDIS_URL`) for distributed caching and rate limiting.
+- **Demo Mode**: Uses local SQLite (`checkpoints.db`) and in-memory structures when database infrastructure is unavailable.
 
-1. **Storage & Checkpointing**:
-   - *Production*: Configured to connect to async PostgreSQL (`AsyncPostgresSaver`) and distributed Redis rate-limiting pools when `DATABASE_URL` and `REDIS_URL` are supplied.
-   - *Demo/Local Execution*: Out-of-the-box, Sarthi runs transparently on **async SQLite (`checkpoints.db`)** and **in-memory rate limiting**. No local Docker setup for Postgres/Redis is required to test the full LangGraph state machine.
+### NLP Classification & LLM Providers
+- **Primary**: Connects to configured cloud LLM endpoints (e.g. NVIDIA NIM APIs) when valid API keys are supplied.
+- **Local Fallback**: If external API calls fail or timeout, the system falls back to keyword and pattern-based classification logic to preserve routing continuity.
 
-2. **NLP Intent Classification & Advisory**:
-   - *Primary*: Integrates with NVIDIA NIM APIs (`NVIDIA Nemotron-3-Ultra-550B`) for primary complex intent resolution and advisory when `NIM_API_KEY` is provided.
-   - *Secondary / Fallback*: Automatically falls back to `Google Gemma-4-31B-IT` via NVIDIA NIM if Nemotron experiences network latency or circuit interruptions.
-   - *Rule-Based Fallback*: If API keys are missing or both cloud models trip, the built-in circuit breaker seamlessly downgrades to a **deterministic local rule-based NLP classification engine** (`_classify_intent_fallback`), ensuring zero disruption to agent routing.
+### Voice Processing (ASR & TTS)
+- **Client-Side**: Voice capture relies primarily on browser-native Web Speech API implementations.
+- **Backend Fallback**: An experimental Silero VAD / ASR fallback processes raw audio streams sent over WebSockets when client-side speech recognition is unavailable. Text-to-speech output uses external TTS REST APIs or synthesized audio fallbacks during offline execution.
 
-3. **Voice Processing (ASR & TTS)**:
-   - Sarthi utilizes a resilient 4-tier cascade for voice generation (`tts.py`):
-     - **Tier 1**: Bhashini WebSocket API (Vernacular Indian languages)
-     - **Tier 2**: NVIDIA Chatterbox NIM
-     - **Tier 3**: Sarvam.ai REST API
-     - **Tier 4**: Local simulated audio output (Mock Sine Wave) ensures frontend voice playback never throws an unhandled exception during offline demonstrations.
+### Audit Logging
+- Audit events are recorded locally by appending JSONL records to disk (e.g., inside `~/.sarthi_cache/audit.jsonl`). For centralized enterprise monitoring, a remote SIEM integration must be explicitly configured and connected.
 
 ---
 
-## 🔒 Security & Authentication Architecture
+## Environment Configuration
 
-- **Tab-Isolated Session Security**: All client authentication tokens (`sarthi_token`, `sarthi_supervisor_token`) are strictly isolated within browser `sessionStorage`. This eliminates cross-tab token leakage and stale state bugs during multi-session agent demonstrations.
-- **Header-Enforced API Verification**: Custom middleware (`verify_api_token`) enforces strict header validation (`X-Sarthi-Token`, `Authorization: Bearer <token>`).
-- **RBI Data Localisation**: All user inputs pass through regex-based and strict PII scrubbers (`[AADHAAR]`, `[PAN]`, `[ACCOUNT]`) before leaving the local security perimeter.
+To start the server, set the applicable environment variables based on your target deployment environment.
+
+### Production Environment (`SARTHI_ENV=production`)
+In production mode, the server strictly enforces security tokens and external database dependency checks. Startup will fail if these variables are missing or use default placeholder strings:
+- `SARTHI_ENV`: Must be set to `production`.
+- `SARTHI_DEMO_MODE`: Must be set to `false`.
+- `SARTHI_API_TOKEN`: Client authentication bearer token (minimum 64 hexadecimal characters).
+- `SARTHI_SUPERVISOR_TOKEN`: Supervisor management bearer token (minimum 64 hexadecimal characters).
+- `SARTHI_HMAC_SECRET`: Secret key used for cryptographic signing (minimum 64 hexadecimal characters).
+- `DATABASE_URL`: Connection URL pointing to a live PostgreSQL database (`postgresql://...`).
+- `REDIS_URL`: Connection URL pointing to a live Redis instance.
+
+### Demo / Local Development (`SARTHI_ENV=development`)
+In development or demo mode, the backend permits local file-based storage and generates ephemeral tokens if static credentials are omitted:
+- `SARTHI_ENV`: Set to `development` (or left unset).
+- `SARTHI_DEMO_MODE`: Set to `true` to enable demo user sessions and local SQLite checkpoint fallbacks.
+- `SARTHI_HMAC_SECRET`: Required to generate signed temporary demo session tokens.
 
 ---
 
-## ⚡ Tech Stack
-
-- **Backend**: Python 3.11, FastAPI, LangGraph, Uvicorn, SQLite/PostgreSQL Async Checkpointing, Pytest.
-- **Frontend**: React 18, TypeScript, Vite, Tailwind CSS, Lucide Icons, Axios.
-- **AI / NLP**: NVIDIA NIM API (`google/gemma-4-31b-it` / Rule Fallback), Parakeet CTC 1.1B (ASR), Bhashini / Sarvam.ai (TTS).
-- **Deployment**: Unified Docker Container running on port `7860` (Hugging Face Spaces compatible).
-
----
-
-## 🚀 Running Locally
+## Running Locally
 
 ### Prerequisites
 - Node.js v18+ & npm
@@ -110,15 +102,13 @@ cd frontend
 npm install
 npm run dev
 ```
-
-The frontend will be available at `http://localhost:5173` proxying API requests to `http://localhost:8000`.
+The application interface will be accessible at `http://localhost:5173`.
 
 ---
 
-## 🧪 Verification & Audit Suite
+## Verification & Testing
 
-Sarthi includes a comprehensive end-to-end verification suite verifying system health, PII scrubbing compliance, prompt injection resilience, and HITL state management:
-
+To run the backend test suite:
 ```bash
 cd backend
 python -m pytest tests/
@@ -126,5 +116,9 @@ python -m pytest tests/
 
 ---
 
-## 📜 License & Compliance
-Built specifically for State Bank of India (SBI) digital transformation initiatives. All workflows adhere to Indian Banking DPDP Act and RBI regulatory standards.
+## Canonical Deployment
+
+Sarthi defines explicit canonical deployment targets to prevent environment drift:
+- **Local Development**: The canonical dev target is `docker-compose.yml` (orchestrating API port 8000, frontend port 3000, metrics port 9090).
+- **Production Deployment**: The canonical prod target is Kubernetes manifests in `k8s/`, maintaining parity with docker-compose.
+

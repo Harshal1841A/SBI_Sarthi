@@ -35,11 +35,11 @@ export const DemoModeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   // Check if demo was previously activated
   useEffect(() => {
-    const saved = localStorage.getItem('sarthi_demo_active') || sessionStorage.getItem('sarthi_demo_active');
+    const saved = sessionStorage.getItem('sarthi_demo_active');
     if (saved === 'true') {
-      const savedToken = sessionStorage.getItem('sarthi_token') || localStorage.getItem('sarthi_token');
-      const savedSup = sessionStorage.getItem('sarthi_supervisor_token') || localStorage.getItem('sarthi_supervisor_token');
-      const savedUser = sessionStorage.getItem('sarthi_demo_user') || localStorage.getItem('sarthi_demo_user');
+      const savedToken = sessionStorage.getItem('sarthi_token');
+      const savedSup = sessionStorage.getItem('sarthi_supervisor_token');
+      const savedUser = sessionStorage.getItem('sarthi_demo_user');
       if (savedToken && savedUser) {
         setIsDemo(true);
         setApiToken(savedToken);
@@ -64,13 +64,10 @@ export const DemoModeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       }
 
       sessionStorage.setItem('sarthi_token', data.api_token);
-      localStorage.removeItem('sarthi_token');
       if (data.supervisor_token) {
         sessionStorage.setItem('sarthi_supervisor_token', data.supervisor_token);
-        localStorage.removeItem('sarthi_supervisor_token');
       } else {
         sessionStorage.removeItem('sarthi_supervisor_token');
-        localStorage.removeItem('sarthi_supervisor_token');
       }
       sessionStorage.setItem('sarthi_demo_active', 'true');
       if (data.demo_user) {
@@ -99,13 +96,9 @@ export const DemoModeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, []);
 
   const deactivateDemo = useCallback(() => {
-    localStorage.removeItem('sarthi_demo_active');
     sessionStorage.removeItem('sarthi_demo_active');
-    localStorage.removeItem('sarthi_demo_user');
     sessionStorage.removeItem('sarthi_demo_user');
-    localStorage.removeItem('sarthi_token');
     sessionStorage.removeItem('sarthi_token');
-    localStorage.removeItem('sarthi_supervisor_token');
     sessionStorage.removeItem('sarthi_supervisor_token');
     setIsDemo(false);
     setDemoUser(null);

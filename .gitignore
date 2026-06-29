@@ -42,7 +42,9 @@ backend/.env.*
 *.db
 *.db-shm
 *.db-wal
-checkpoints.db
+*.sqlite
+*.sqlite3
+backend/checkpoints*
 
 # ─── Logs ──────────────────────────────────────────────
 *.log

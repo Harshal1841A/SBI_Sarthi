@@ -16,7 +16,7 @@ from utils.circuit_breaker import CircuitBreaker
 logger = structlog.get_logger()
 cb_nemotron = CircuitBreaker(failure_threshold=3, recovery_timeout=60)
 cb_gemma = CircuitBreaker(failure_threshold=5, recovery_timeout=60)
-cb_nemotron_stream = CircuitBreaker(failure_threshold=3, recovery_timeout=60)  # FIX C4: separate CB for streaming path
+cb_nemotron_stream = CircuitBreaker(failure_threshold=3, recovery_timeout=60)  # Note C4: separate CB for streaming path
 
 _BASE_URL       = "https://integrate.api.nvidia.com/v1"
 _NEMOTRON_MODEL = "nvidia/nemotron-3-ultra-550b-a55b"

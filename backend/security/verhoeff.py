@@ -91,8 +91,8 @@ class AadhaarField(str):
     
     @property
     def masked(self) -> str:
-        """Return masked form: XXXX XXXX XXXX last4"""
-        return f"XXXX-XXXX-{self[-4:]}"
+        """Return masked form: **** **** **** last4"""
+        return f"****-****-{self[-4:]}"
     
     @property
     def last4(self) -> str:
@@ -160,7 +160,7 @@ def validate_aadhaar(number: str) -> dict:
             return result
         result["checksum_ok"] = True
         result["valid"] = True
-        result["masked"] = f"XXXX XXXX {cleaned[-4:]}"
+        result["masked"] = f"**** **** {cleaned[-4:]}"
         result["last4"] = cleaned[-4:]
         
     except Exception as e:

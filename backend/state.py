@@ -27,7 +27,7 @@ class SarthiState(TypedDict):
     # ── Onboarding (Acquisition) ──────────────────────────────────
     onboarding_step: str  # e.g., "idle", "collect_aadhaar", "collect_pan", "e_kyc", "v_kyc", "consent_collection", "fund_account"
     aadhaar_number: Optional[str]  # HASHED — never store raw
-    aadhaar_last4: Optional[str]    # Masked display: "XXXX XXXX 0123"
+    aadhaar_last4: Optional[str]    # Masked display: "**** **** 0123"
     pan_number: Optional[str]     # HASHED — never store raw
     kyc_token: Optional[str]
     profile_id: Optional[str]

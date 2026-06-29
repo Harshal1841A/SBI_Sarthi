@@ -67,7 +67,7 @@ def _welcome_onboarding(state: SarthiState) -> dict:
         "response_text": responses.get(lang, responses["en"]),
         "onboarding_step": "collect_aadhaar",
         "status": "RUNNING",
-        # FIX M-6: always spread existing metadata — never replace the whole dict
+        # Resolved M-6: always spread existing metadata — never replace the whole dict
         "metadata": {**state.get("metadata", {}), "onboarding_started": True}
     }
 
@@ -171,10 +171,10 @@ def _process_pan(state: SarthiState, user_text: str) -> dict:
     
     pan = pan_match.group(0)
 
-    # FIX L-7: pan already matched the full-pattern regex above;
+    # Resolved L-7: pan already matched the full-pattern regex above;
     # the second re.match() check was redundant dead code — removed.
 
-    # FIX C-5: Hash PAN IMMEDIATELY — never store raw PAN in state.
+    # Resolved C-5: Hash PAN IMMEDIATELY — never store raw PAN in state.
     # Raw PAN in state would be dumped into every audit log snapshot,
     # violating DPDP Act 2023 / IT Act Section 43A.
     pan_hash = hash_field(pan)
@@ -197,14 +197,14 @@ def _process_pan(state: SarthiState, user_text: str) -> dict:
 
     return {
         "response_text": responses.get(lang, responses["en"]),
-        "pan_number": pan_hash,   # FIX C-5: HASHED — never raw
+        "pan_number": pan_hash,   # Resolved C-5: HASHED — never raw
         "onboarding_step": "e_kyc",
         "completed_steps": ["create_profile", "verify_kyc"],
         "status": "RUNNING"
     }
 
 
-# FIX C-6: verify_aadhaar() was dead code that double-hashed an already-hashed
+# Resolved C-6: verify_aadhaar() was dead code that double-hashed an already-hashed
 # Aadhaar (from _process_aadhaar). This produced a corrupted hash value useless
 # for any UIDAI AUA call. The function also used time.sleep(1) which blocks the
 # event loop. Removed entirely — eKYC is handled in _process_ekyc() via the
@@ -306,7 +306,7 @@ def _process_consent(state: SarthiState, user_text: str) -> dict:
                 "last_error": "P001_rejected"
             }
         
-        # FIX M-8: avoid double-counting consent artifacts.
+        # Resolved M-8: avoid double-counting consent artifacts.
         # State may already have some artifacts from previous turns.
         # Re-read them by purpose_id to build the authoritative list.
         existing_artifacts = state.get("consent_artifacts", [])

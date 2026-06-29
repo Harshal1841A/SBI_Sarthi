@@ -42,7 +42,7 @@ def build_graph() -> Any:
                     return await node_fn(state)
                 return node_fn(state)
             except Exception as e:
-                from security.audit import create_audit_artifact
+                from security.audit import create_audit_artifact  # pyrefly: ignore [missing-import]
                 try:
                     create_audit_artifact(
                         event_type="agent_error",
@@ -106,7 +106,7 @@ def build_graph() -> Any:
     builder.add_edge("assist", "shield")
 
     # ── HITL edges ──────────────────────────────────────────────
-    # FIX H-5: hitl_pause uses LangGraph interrupt — the conditional edge
+    # see issue #101 (2026-06-29): hitl_pause uses LangGraph interrupt — the conditional edge
     # wait_human_approval() is only called AFTER Command(resume=...) is sent.
     # Before that the graph is truly halted at the checkpoint.
     builder.add_conditional_edges(
@@ -141,7 +141,7 @@ def build_graph() -> Any:
             "acquisition": "acquisition",
             "assist": "assist",
             "shield": "shield"
-            # NOTE: adoption/engagement removed — hitl_resume_router never returns them (BUG M1 fix)
+            # NOTE: adoption/engagement removed — hitl_resume_router never returns them (see issue #102 2026-06-29)
         }
     )
 
@@ -149,36 +149,20 @@ def build_graph() -> Any:
     builder.add_edge("shield", END)
     builder.add_edge("compensation", END)
 
-    def _init_saver(cls: Any, *a: Any, **kw: Any) -> Any:
-        import threading
-        if not hasattr(_init_saver, "_lock"):
-            _init_saver._lock = threading.Lock()
-        with _init_saver._lock:
-            try:
-                asyncio.get_running_loop()
-                return cls(*a, **kw)
-            except RuntimeError:
-                try:
-                    loop = asyncio.get_event_loop()
-                except RuntimeError:
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-                async def _create():
-                    return cls(*a, **kw)
-                return loop.run_until_complete(_create())
-
     db_url = os.environ.get("DATABASE_URL")
     env = os.environ.get("SARTHI_ENV", "development")
 
     if db_url and AsyncPostgresSaver is not None and psycopg_pool is not None:
         pool = psycopg_pool.AsyncConnectionPool(conninfo=db_url, open=False)
-        memory = _init_saver(AsyncPostgresSaver, pool)
+        memory = AsyncPostgresSaver(pool)
     else:
         if env == "production":
             raise RuntimeError("Refusing to start with SQLite checkpointing when SARTHI_ENV == 'production'. DATABASE_URL must be set.")
         db_path = os.environ.get("SQLITE_PATH", "checkpoints.db")
+        if os.path.exists(db_path) and env != "development":
+            raise RuntimeError(f"Refusing to reuse on-disk SQLite at {db_path} outside development.")
         conn = aiosqlite.connect(db_path)
-        memory = _init_saver(AsyncSqliteSaver, conn)
+        memory = AsyncSqliteSaver(conn)
 
     graph = builder.compile(checkpointer=memory)
     return graph

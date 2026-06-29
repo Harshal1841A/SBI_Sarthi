@@ -1,9 +1,20 @@
 import asyncio
 import threading
+import struct
 import numpy as np
 from typing import Optional, Tuple, Dict, List
 from collections import defaultdict
 from voice.asr import ASRClient
+from security.pii_scrubber import scrub_pii
+
+def _float32_to_wav(audio_float32: np.ndarray, sample_rate: int = 16000) -> bytes:
+    audio_int16 = (audio_float32 * 32767).clip(-32768, 32767).astype(np.int16)
+    num_samples = len(audio_int16)
+    header = struct.pack('<4sI4s4sIHHIIHH4sI',
+        b'RIFF', 36 + num_samples * 2, b'WAVE', b'fmt ', 16,
+        1, 1, sample_rate, sample_rate * 2, 2, 16,
+        b'data', num_samples * 2)
+    return header + audio_int16.tobytes()
 
 _asr = ASRClient()
 
@@ -101,13 +112,17 @@ async def process_audio_chunk(session_id: str, pcm_bytes: bytes, language: str =
                 if session_id in session_buffers:
                     session_buffers[session_id].clear()
             
+            wav_bytes = _float32_to_wav(buffer_array)
             try:
-                asr_result = await _asr.transcribe(buffer_array.tobytes(), language)
+                asr_result = await _asr.transcribe(wav_bytes, language)
+                raw_txt = asr_result.get("text")
+                scrubbed_txt = scrub_pii(raw_txt) if raw_txt else None
                 return {
-                    "text": asr_result["text"],
+                    "text": raw_txt,
+                    "scrubbed_text": scrubbed_txt,
                     "needs_repeat": asr_result["confidence"] < 0.7,
                     "confidence": asr_result["confidence"],
-                    "audio_buffer": buffer_array.tobytes()
+                    "audio_buffer": wav_bytes
                 }
             except Exception as e:
                 # Fallback on failure
@@ -115,7 +130,7 @@ async def process_audio_chunk(session_id: str, pcm_bytes: bytes, language: str =
                     "text": None,
                     "needs_repeat": True,
                     "confidence": confidence,
-                    "audio_buffer": buffer_array.tobytes(),
+                    "audio_buffer": wav_bytes,
                     "error": str(e)
                 }
         else:

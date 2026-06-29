@@ -14,6 +14,9 @@ import AuditLogViewer from './components/AuditLogViewer';
 import ChatInterface from './components/ChatInterface';
 import SupervisorDashboard from './components/SupervisorDashboard';
 import { systemApi } from './services/api';
+import { migrateStorageOnLoad } from './utils/storage';
+
+migrateStorageOnLoad();
 
 type NavTab = 'home' | 'assistant' | 'supervisor' | 'security' | 'workflow' | 'voice' | 'audit';
 
@@ -177,19 +180,15 @@ function App() {
     systemApi.getHealth()
       .then(() => {
         setBackendStatus('up');
-        // Check sessionStorage first (migrated), fall back to localStorage (legacy)
-        const hasToken = sessionStorage.getItem('sarthi_token') || localStorage.getItem('sarthi_token');
-        const hasSup = sessionStorage.getItem('sarthi_supervisor_token') || localStorage.getItem('sarthi_supervisor_token');
+        const hasToken = sessionStorage.getItem('sarthi_token');
+        const hasSup = sessionStorage.getItem('sarthi_supervisor_token');
         if (!hasToken || !hasSup) {
           systemApi.getDemoToken().then(data => {
-            // Write to sessionStorage (per BUG-16 migration) — not localStorage
             if (data.api_token) {
               sessionStorage.setItem('sarthi_token', data.api_token);
-              localStorage.removeItem('sarthi_token');
             }
             if (data.supervisor_token) {
               sessionStorage.setItem('sarthi_supervisor_token', data.supervisor_token);
-              localStorage.removeItem('sarthi_supervisor_token');
             }
           }).catch(console.error);
         }
