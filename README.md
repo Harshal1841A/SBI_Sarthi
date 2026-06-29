@@ -1,3 +1,12 @@
+---
+title: Sarthi AI Banking Orchestrator
+emoji: 🏦
+colorFrom: blue
+colorTo: indigo
+sdk: docker
+pinned: false
+---
+
 # Sarthi AI — Multi-Agent Banking Orchestration Platform
 
 Sarthi is an enterprise banking assistant and routing platform built for customer service workflows. It routes user inquiries across specialized domain agents, enforcing data privacy guidelines and Human-In-The-Loop (HITL) approval gates for sensitive or high-value transactions.
