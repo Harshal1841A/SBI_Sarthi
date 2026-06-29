@@ -365,6 +365,7 @@ supervisor_router = APIRouter(prefix="/supervisor", tags=["supervisor"], depende
 # ────────────────────────────────────────────────────────────────
 
 @app.get("/health")
+@app.get("/api/health")
 async def health_check():
     """Health check endpoint — verifies actual service status."""
     services = {}
