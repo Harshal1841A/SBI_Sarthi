@@ -7,7 +7,7 @@ logger = structlog.get_logger("pii_scrubber")
 # ────────────────────────────────────────────────────────────────
 # PII Scrubber — RBI Data Localisation Compliance Layer
 # Strips ALL personally identifiable information before any
-# external API call (Groq, NIM, Bhashini, etc.)
+# external API call (Gemma, NIM, Bhashini, etc.)
 # ────────────────────────────────────────────────────────────────
 
 PII_PATTERNS = {

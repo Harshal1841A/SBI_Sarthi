@@ -15,7 +15,7 @@ class FeatureFlags:
         self.flags = {
             "enable_yono_voice": True,
             "enable_kyc_vision": True,
-            "enable_groq_fallback": True,
+            "enable_gemma_fallback": True,
             "enable_whatsapp_channel": False
         }
         
