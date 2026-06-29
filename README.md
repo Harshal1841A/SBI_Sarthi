@@ -58,7 +58,7 @@ To ensure 100% uptime in demo environments and local executions without requirin
    - *Demo/Local Execution*: Out-of-the-box, Sarthi runs transparently on **async SQLite (`checkpoints.db`)** and **in-memory rate limiting**. No local Docker setup for Postgres/Redis is required to test the full LangGraph state machine.
 
 2. **NLP Intent Classification & Advisory**:
-   - *Primary*: Integrates with NVIDIA NIM APIs (`Nemotron-3-Ultra-550B`) for complex intent resolution when `NIM_API_KEY` is provided.
+   - *Primary*: Integrates with NVIDIA NIM APIs (`Google Gemma-4-31B-IT`) for complex intent resolution when `NIM_API_KEY` is provided.
    - *Fallback*: If the API key is missing, unconfigured, or network timeouts occur, the built-in circuit breaker seamlessly downgrades to a **deterministic local rule-based NLP classification engine** (`_classify_intent_fallback`), ensuring zero disruption to agent routing.
 
 3. **Voice Processing (ASR & TTS)**:
@@ -82,7 +82,7 @@ To ensure 100% uptime in demo environments and local executions without requirin
 
 - **Backend**: Python 3.11, FastAPI, LangGraph, Uvicorn, SQLite/PostgreSQL Async Checkpointing, Pytest.
 - **Frontend**: React 18, TypeScript, Vite, Tailwind CSS, Lucide Icons, Axios.
-- **AI / NLP**: NVIDIA Nemotron-3-Ultra-550B (NIM API / Rule Fallback), Parakeet CTC 1.1B (ASR), Bhashini / Sarvam.ai (TTS).
+- **AI / NLP**: NVIDIA NIM API (`google/gemma-4-31b-it` / Rule Fallback), Parakeet CTC 1.1B (ASR), Bhashini / Sarvam.ai (TTS).
 - **Deployment**: Unified Docker Container running on port `7860` (Hugging Face Spaces compatible).
 
 ---

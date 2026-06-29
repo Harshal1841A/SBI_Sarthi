@@ -1,5 +1,5 @@
 """
-NemotronClient — NVIDIA Nemotron-3-Ultra-550B-A55B via NVIDIA Integrate API.
+NemotronClient — Google Gemma-4-31B-IT via NVIDIA Integrate API.
 
 Uses the official `openai` SDK (OpenAI-compatible endpoint) exactly as shown
 in the NVIDIA playground, with async streaming for low-latency responses.
@@ -20,7 +20,7 @@ logger = structlog.get_logger()
 cb = CircuitBreaker(failure_threshold=5, recovery_timeout=60)
 
 _BASE_URL  = "https://integrate.api.nvidia.com/v1"
-_MODEL     = "nvidia/nemotron-3-ultra-550b-a55b"
+_MODEL     = "google/gemma-4-31b-it"
 _THINK_RE  = re.compile(r"<think>.*?</think>", re.DOTALL)
 
 
