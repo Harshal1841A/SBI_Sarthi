@@ -1,4 +1,5 @@
 import time
+import hashlib
 from typing import Any
 from state import SarthiState
 from security.audit import create_audit_artifact
@@ -134,7 +135,7 @@ def _resume_loan(state: SarthiState, approver_id: str) -> dict:
     entities = state.get("extracted_entities", {})
     loan_amount = entities.get("amount", 50000)
     
-    loan_id = f"LN_SBI_2026_{hash(state['session_id'] + approver_id) & 0xFFFFFF:06x}"
+    loan_id = f"LN_SBI_2026_{hashlib.sha256((state['session_id'] + approver_id).encode('utf-8')).hexdigest()[:6]}"
     
     responses = {
         "en": f"Congratulations! Your loan of Rs. {loan_amount:,} is sanctioned by officer {approver_id}. Loan ID: {loan_id}. Disbursement will happen within 24 hours.",

@@ -1,4 +1,5 @@
 from typing import Any
+from datetime import datetime
 from state import SarthiState
 from security.audit import create_audit_artifact
 
@@ -36,7 +37,7 @@ async def compensation_node(state: SarthiState) -> dict:
         
         elif step == "v_kyc":
             result = _reverse_vkyc(state)
-            logs.append(f"Reversed V-KYC verification: {result['status']}")
+            logs.append(f"Reversed V-KYC verification: {result.get('status', 'unknown')}")
         
         elif step == "verify_kyc":
             result = _invalidate_kyc(state)
@@ -103,7 +104,7 @@ def _archive_profile(state: SarthiState) -> dict:
     return {
         "profile_id": profile_id,
         "status": "archived",
-        "archive_date": "2026-06-18",
+        "archive_date": datetime.utcnow().date().isoformat(),
         "retention_days": 7  # User can resume within 7 days
     }
 

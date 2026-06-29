@@ -25,7 +25,7 @@ INTENT_ROUTING = {
     "transaction_history": "assist",
     "spending_alert": "engagement",
     "churn_risk": "engagement",
-    "fraud_report": "shield",
+    "fraud_report": "assist",      # FIX M4: assist handles card-block + HITL, not shield
     "compliance_query": "shield",
     "dormant_reactivation": "engagement",
     "overdraft_prevention": "engagement",

@@ -281,9 +281,19 @@ async def lifespan(app: FastAPI):
     
     try:
         graph = get_graph()
-        if hasattr(graph.checkpointer, "setup"):
+        # FIX C2: open the Postgres pool if one was created (open=False only defers connection)
+        checkpointer = graph.checkpointer
+        if hasattr(checkpointer, "conn") and hasattr(checkpointer.conn, "open"):
             try:
-                await graph.checkpointer.setup()
+                await checkpointer.conn.open()
+                logger.info("Postgres connection pool opened")
+            except Exception as e:
+                if SARTHI_ENV == "production":
+                    raise
+                logger.warning(f"Postgres pool open failed (degraded mode): {e}")
+        if hasattr(checkpointer, "setup"):
+            try:
+                await checkpointer.setup()
             except Exception as e:
                 if SARTHI_ENV == "production":
                     raise
@@ -996,7 +1006,7 @@ async def yono_transaction_webhook(payload: YONOTransaction):
     graph = get_graph()
     thread_id = f"txn_{payload.user_id}"
     
-    txn_data = payload.dict()
+    txn_data = payload.model_dump()
     # Convert amount to integer paise
     txn_data["amount"] = int(round(payload.amount * 100))
     
@@ -1030,8 +1040,7 @@ async def yono_transaction_webhook(payload: YONOTransaction):
 async def get_audit_logs_endpoint(
     session_id: Optional[str] = None,
     event_type: Optional[str] = None,
-    limit: int = 100,
-    _=Depends(verify_api_token)
+    limit: int = 100
 ):
     """Query audit logs."""
     logs = get_audit_logs(session_id=session_id, event_type=event_type, limit=limit)
@@ -1042,7 +1051,7 @@ async def get_audit_logs_endpoint(
     }
 
 @api_router.get("/audit/stats")
-async def get_audit_stats_endpoint(_=Depends(verify_api_token)):
+async def get_audit_stats_endpoint():
     """Get audit statistics."""
     return get_audit_stats()
 

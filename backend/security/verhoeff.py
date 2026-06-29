@@ -92,7 +92,7 @@ class AadhaarField(str):
     @property
     def masked(self) -> str:
         """Return masked form: XXXX XXXX XXXX last4"""
-        return f"XXXX XXXX {self[-4:]}"
+        return f"XXXX-XXXX-{self[-4:]}"
     
     @property
     def last4(self) -> str:

@@ -139,10 +139,9 @@ def build_graph() -> Any:
         hitl_resume_router,
         {
             "acquisition": "acquisition",
-            "adoption": "adoption",
-            "engagement": "engagement",
             "assist": "assist",
             "shield": "shield"
+            # NOTE: adoption/engagement removed — hitl_resume_router never returns them (BUG M1 fix)
         }
     )
 

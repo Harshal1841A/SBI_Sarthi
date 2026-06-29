@@ -97,7 +97,7 @@ async def adoption_agent(state: SarthiState) -> dict:
         return _handle_product_inquiry(state)
     elif intent == "savings_inquiry":
         return _handle_savings_recommendation(state)
-    elif "transaction" in state.get("metadata", {}):
+    elif "transaction" in state:
         return _handle_transaction_nudge(state)
     else:
         return _default_adoption_response(state)
@@ -112,9 +112,9 @@ def _handle_product_inquiry(state: SarthiState) -> dict:
     product_info = SBI_PRODUCTS.get(product, SBI_PRODUCTS["recurring_deposit"])
     
     responses = {
-        "en": f"{product_info['name']}: Interest rate {product_info['rate']}% per annum. Would you like to apply?",
-        "hi": f"{product_info['name']}: Byaj dar {product_info['rate']}% prati varsh. Kya aap apply karna chahenge?",
-        "mr": f"{product_info['name']}: Vyaj dar {product_info['rate']}% prati varsh. Tumhi apply karu ichchita ka?"
+        "en": f"{product_info['name']}: Interest rate {product_info.get('rate', 'N/A')}% per annum. Would you like to apply?",
+        "hi": f"{product_info['name']}: Byaj dar {product_info.get('rate', 'N/A')}% prati varsh. Kya aap apply karna chahenge?",
+        "mr": f"{product_info['name']}: Vyaj dar {product_info.get('rate', 'N/A')}% prati varsh. Tumhi apply karu ichchita ka?"
     }
     
     create_audit_artifact(
@@ -161,8 +161,8 @@ def _handle_transaction_nudge(state: SarthiState) -> dict:
     Triggered by YONO transaction webhook.
     """
     lang = state.get("language", "en")
-    metadata = state.get("metadata", {})
-    transaction = metadata.get("transaction", {})
+    # FIX L2: YONO webhook sets state["transaction"] at the top level, not metadata["transaction"]
+    transaction = state.get("transaction") or state.get("metadata", {}).get("transaction", {})
     
     category = transaction.get("category", "")
     amount = transaction.get("amount", 0)

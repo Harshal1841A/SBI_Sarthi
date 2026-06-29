@@ -1,4 +1,5 @@
 import re
+import hashlib
 from typing import Any
 from state import SarthiState
 from security.verhoeff import validate_aadhaar, validate_pan, AadhaarValidationError
@@ -216,7 +217,7 @@ def _process_ekyc(state: SarthiState) -> dict:
     lang = state.get("language", "en")
     
     # Mock eKYC call — in production, calls SBI middleware (NOT direct UIDAI)
-    kyc_token = f"kyc_{state['session_id'][:8]}_{hash(state.get('aadhaar_number', '')) & 0xFFFFFF:06x}"
+    kyc_token = f"kyc_{state['session_id'][:8]}_{hashlib.sha256(state.get('aadhaar_number', '').encode('utf-8')).hexdigest()[:6]}"
     
     create_audit_artifact(
         event_type="agent_decision",
@@ -246,13 +247,14 @@ def _process_consent(state: SarthiState, user_text: str) -> dict:
     lang = state.get("language", "en")
     consent_artifacts = state.get("consent_artifacts", [])
     
-    # Determine which consent we're collecting
-    purposes_collected = [a["purpose_id"] for a in consent_artifacts if a.get("granted")]
+    # Determine which consent we're collecting.
+    # Use ALL artifacts (granted OR rejected) to avoid re-asking for rejected purposes.
+    purposes_already_asked = {a["purpose_id"] for a in consent_artifacts}
     all_purposes = ["P001", "P002", "P003", "P004"]
     
     next_purpose = None
     for p in all_purposes:
-        if p not in purposes_collected:
+        if p not in purposes_already_asked:
             next_purpose = p
             break
     
@@ -313,7 +315,9 @@ def _process_consent(state: SarthiState, user_text: str) -> dict:
         updated_artifacts = list(existing_by_purpose.values())
 
         # Move to next consent or V-KYC
-        remaining = [p for p in all_purposes if p not in [a["purpose_id"] for a in updated_artifacts]]
+        # Check remaining by presence (not grant status) to avoid infinite loop on rejections
+        asked_purposes = {a["purpose_id"] for a in updated_artifacts}
+        remaining = [p for p in all_purposes if p not in asked_purposes]
         if not remaining:
             return {
                 **_proceed_to_vkyc(state),
@@ -404,7 +408,7 @@ def _process_funding(state: SarthiState, user_text: str) -> dict:
     lang = state.get("language", "en")
     
     # Mock account creation
-    account_id = f"SBIN{hash(state['session_id']) & 0xFFFFFFFF:010d}"
+    account_id = f"SBIN{int(hashlib.sha256(state['session_id'].encode('utf-8')).hexdigest()[:8], 16):010d}"
     
     create_audit_artifact(
         event_type="agent_decision",
@@ -462,7 +466,7 @@ def _process_loan(state: SarthiState, user_text: str) -> dict:
         }
     
     # Small loan — auto-approved
-    loan_id = f"LN_SBI_2026_{hash(state['session_id']) & 0xFFFFFF:06x}"
+    loan_id = f"LN_SBI_2026_{hashlib.sha256(state['session_id'].encode('utf-8')).hexdigest()[:6]}"
     
     responses = {
         "en": f"Loan sanctioned! Loan ID: {loan_id}. Amount: Rs. {loan_amount:,}. Interest rate: 8.5%. EMI details will be sent via SMS.",

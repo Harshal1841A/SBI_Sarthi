@@ -40,12 +40,14 @@ def _file_lock(path: str, timeout: float = 2.0):
             time.sleep(0.005)
     if fd is None:
         logger.warning("lock_acquire_timeout", path=path)
+        # Do NOT yield — raise so callers know the operation is unsafe
+        raise RuntimeError(f"Could not acquire audit lock on {path} within {timeout}s")
     else:
         os.close(fd)
     try:
         yield
     finally:
-        if fd is not None and os.path.exists(lock_path):
+        if os.path.exists(lock_path):
             try:
                 os.remove(lock_path)
             except OSError:
@@ -67,7 +69,16 @@ def _get_last_hash_from_disk() -> str:
     if not os.path.exists(_AUDIT_LOG_PATH):
         return "0" * 64
     try:
-        with _file_lock(_AUDIT_LOG_PATH):
+        # For read operations, attempt lock but fall back to reading without it
+        # if the lock is contended (read is safer than a failed write).
+        try:
+            lock_ctx = _file_lock(_AUDIT_LOG_PATH, timeout=0.5)
+            lock_ctx.__enter__()
+            locked = True
+        except RuntimeError:
+            locked = False
+            lock_ctx = None
+        try:
             with open(_AUDIT_LOG_PATH, "rb") as f:
                 try:
                     f.seek(-2048, os.SEEK_END)
@@ -78,10 +89,17 @@ def _get_last_hash_from_disk() -> str:
                     if line.strip():
                         try:
                             return json.loads(line.decode('utf-8'))["hash"]
-                        except Exception:
+                        except (json.JSONDecodeError, KeyError, UnicodeDecodeError):
+                            # Skip malformed/truncated lines from crash-mid-write (BUG M6)
                             continue
+        finally:
+            if locked and lock_ctx is not None:
+                try:
+                    lock_ctx.__exit__(None, None, None)
+                except Exception:
+                    pass
     except Exception as e:
-        logger.error("Failed to read last audit hash", error=str(e))
+        logger.warning("Failed to read last audit hash (using genesis hash)", error=str(e))
     return "0" * 64
 
 def _append_audit_to_disk(artifact: dict) -> None:
