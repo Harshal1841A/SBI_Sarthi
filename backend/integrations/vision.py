@@ -5,7 +5,10 @@ Uses meta/llama-3.2-11b-vision-instruct on the same NVIDIA endpoint
 as Nemotron, so a single NIM_API_KEY covers both LLM + vision.
 """
 
-import os, json, re, structlog
+import os
+import json
+import re
+import structlog
 from openai import AsyncOpenAI
 from utils.circuit_breaker import CircuitBreaker
 

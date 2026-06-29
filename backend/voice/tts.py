@@ -1,5 +1,5 @@
 import asyncio
-from typing import AsyncGenerator, Optional
+from typing import AsyncGenerator
 
 # ────────────────────────────────────────────────────────────────
 # TTS Cascade — 4-Tier Fallback (sub-700ms to first audio byte)
@@ -18,7 +18,11 @@ from typing import AsyncGenerator, Optional
 # Health check: curl http://localhost:9000/v1/health/ready
 # ────────────────────────────────────────────────────────────────
 
-import websockets, json, os, io, struct, structlog
+import websockets
+import json
+import os
+import struct
+import structlog
 
 logger = structlog.get_logger()
 
@@ -188,7 +192,8 @@ async def chatterbox_nim_tts(text: str, lang: str = "hi") -> bytes:
 # ------------------------------------------------------------------
 async def sarvam_tts(text: str, lang: str) -> bytes:
     """Fallback: Sarvam.ai REST API."""
-    import httpx, base64
+    import httpx
+    import base64
     api_key = os.environ.get("SARVAM_API_KEY", "")
     if not api_key:
         raise ConnectionError("Sarvam API key not configured")

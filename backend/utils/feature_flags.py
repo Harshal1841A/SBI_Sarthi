@@ -1,6 +1,6 @@
 import os
 import structlog
-from typing import Dict, Any
+from typing import Dict
 
 logger = structlog.get_logger()
 

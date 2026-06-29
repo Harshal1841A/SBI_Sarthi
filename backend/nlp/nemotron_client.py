@@ -8,7 +8,9 @@ Uses the official `openai` SDK (OpenAI-compatible endpoint) exactly as shown
 in the NVIDIA playground, with async streaming for low-latency responses.
 """
 
-import os, json, re, asyncio, structlog
+import os
+import re
+import structlog
 from typing import AsyncGenerator
 from openai import AsyncOpenAI
 from utils.circuit_breaker import CircuitBreaker

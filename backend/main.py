@@ -26,9 +26,8 @@ except ImportError:
     asyncpg = None
     ASYNCPG_AVAILABLE = False
 import time
-import sqlite3
 from datetime import datetime
-from typing import Optional, List, Dict, Any
+from typing import Optional, List
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, APIRouter, WebSocket, WebSocketDisconnect, HTTPException, Depends, UploadFile, File, Form, Request
@@ -45,23 +44,18 @@ logger = structlog.get_logger("main")
 
 # Local imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from state import SarthiState
 from graph import get_graph
-from security.pii_scrubber import detect_pii
 from security.pii_middleware import PIIIngressMiddleware
-from security.verhoeff import validate_aadhaar, validate_pan, AadhaarValidationError
 from security.consent import (
     create_consent_artifact, store_consent_artifact, get_last_consent_hash,
-    get_consent_chain, get_user_consents, revoke_consent_artifact, get_consent_notice,
+    get_consent_chain, revoke_consent_artifact, get_consent_notice,
     verify_consent_chain
 )
 from security.audit import create_audit_artifact, get_audit_logs, get_audit_stats, verify_audit_chain
 from security.prompt_injection import shield_guard, detect_prompt_injection
 from voice.vad import process_audio_chunk, cleanup_session_buffer, session_buffers
-from voice.tts import text_to_speech, tts_cascade
+from voice.tts import tts_cascade
 from integrations.sbi_mock import sbi_api
-from integrations.yono_mock import yono_api
-from integrations.kyc_mock import kyc_api
 from utils.cache import get_cache_stats, clear_cache, pre_cache_demo_interactions
 from utils.connections import postgres_db, redis_cache
 from channels.whatsapp import whatsapp_router
@@ -637,7 +631,7 @@ async def voice_websocket(websocket: WebSocket) -> None:
                     
             except WebSocketDisconnect:
                 break
-            except Exception as e:
+            except Exception:
                 await websocket.send_json({
                     "type": "error",
                     "message": "Internal processing error"

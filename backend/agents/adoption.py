@@ -1,7 +1,5 @@
-from typing import Any
 from state import SarthiState
 from security.audit import create_audit_artifact
-from utils.cache import cached_llm_call
 
 # ────────────────────────────────────────────────────────────────
 # Adoption Agent — Cross-Sell & Digital Product Adoption

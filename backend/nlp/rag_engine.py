@@ -1,4 +1,6 @@
-import sqlite3, os, numpy as np
+import sqlite3
+import os
+import numpy as np
 from typing import List, Dict
 from sentence_transformers import SentenceTransformer
 

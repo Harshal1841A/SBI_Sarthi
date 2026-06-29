@@ -1,5 +1,5 @@
-import time, asyncio
-from typing import Callable, Any
+import time
+from typing import Callable
 from enum import Enum
 
 import inspect
@@ -32,7 +32,7 @@ class CircuitBreaker:
                     if self.state == State.HALF_OPEN:
                         self.state = State.CLOSED
                         self.failure_count = 0
-                except Exception as e:
+                except Exception:
                     self.failure_count += 1
                     self.last_failure_time = time.time()
                     if self.failure_count >= self.failure_threshold:
@@ -53,7 +53,7 @@ class CircuitBreaker:
                         self.state = State.CLOSED
                         self.failure_count = 0
                     return result
-                except Exception as e:
+                except Exception:
                     self.failure_count += 1
                     self.last_failure_time = time.time()
                     if self.failure_count >= self.failure_threshold:

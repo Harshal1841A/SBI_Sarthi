@@ -2,7 +2,6 @@ from typing import Any
 from state import SarthiState
 from langgraph.graph import StateGraph, END
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
-from langgraph.types import Command
 
 import asyncio
 import os
@@ -22,7 +21,7 @@ from agents.adoption import adoption_agent
 from agents.engagement import engagement_agent
 from agents.assist import assist_agent
 from agents.shield import shield_agent
-from agents.compensation import compensation_node, check_onboarding_status_for_compensation
+from agents.compensation import compensation_node
 from agents.hitl import hitl_pause_node, hitl_resume_node, wait_human_approval
 
 # ────────────────────────────────────────────────────────────────

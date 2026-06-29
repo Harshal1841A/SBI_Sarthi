@@ -1,8 +1,6 @@
 import re
-from typing import Any
 from state import SarthiState
 from security.audit import create_audit_artifact
-from utils.cache import cached_llm_call
 
 # ────────────────────────────────────────────────────────────────
 # Assist Agent — 12-Language Support, Human Escalation, Code-Switching

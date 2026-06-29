@@ -1,6 +1,6 @@
 import re
 import base64
-from typing import Tuple, List, Dict
+from typing import Tuple, List
 
 # ────────────────────────────────────────────────────────────────
 # Prompt Injection Defense — Shield Agent Input Layer
@@ -215,7 +215,7 @@ def _advanced_hallucination_check(text: str) -> float:
         if not result["verified"]:
             return 0.9  # High hallucination score
         return 0.0
-    except Exception as e:
+    except Exception:
         # If RAG is unavailable, assume safe (conservative) or flag for review
         return 0.0
 

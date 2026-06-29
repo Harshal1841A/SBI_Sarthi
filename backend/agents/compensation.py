@@ -1,4 +1,3 @@
-from typing import Any
 from datetime import datetime
 from state import SarthiState
 from security.audit import create_audit_artifact

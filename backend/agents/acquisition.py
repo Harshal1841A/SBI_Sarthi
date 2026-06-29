@@ -1,12 +1,10 @@
 import re
 import hashlib
-from typing import Any
 from state import SarthiState
-from security.verhoeff import validate_aadhaar, validate_pan, AadhaarValidationError
-from security.consent import create_consent_artifact, store_consent_artifact, get_last_consent_hash, get_consent_notice, CONSENT_PURPOSES
+from security.verhoeff import validate_aadhaar
+from security.consent import create_consent_artifact, store_consent_artifact, get_last_consent_hash, get_consent_notice
 from security.audit import create_audit_artifact
 from security.encryption import hash_field
-from utils.cache import cached_llm_call
 
 # ────────────────────────────────────────────────────────────────
 # Acquisition Agent — Customer Onboarding (KYC, V-KYC, Consent)

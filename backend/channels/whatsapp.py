@@ -1,8 +1,7 @@
 import os
-from fastapi import APIRouter, Request, HTTPException, Depends
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 import structlog
-from typing import Optional
 
 logger = structlog.get_logger()
 whatsapp_router = APIRouter()

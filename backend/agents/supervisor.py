@@ -1,9 +1,9 @@
-from typing import Any, Optional
+from typing import Optional
 from state import SarthiState
 from security.pii_scrubber import scrub_pii
-from security.prompt_injection import shield_guard, calculate_risk_score
+from security.prompt_injection import calculate_risk_score
 from security.audit import create_audit_artifact
-from utils.cache import cached_llm_call, async_cached_llm_call
+from utils.cache import async_cached_llm_call
 from nlp.nemotron_client import NemotronClient
 import asyncio
 import re
@@ -220,7 +220,7 @@ async def _classify_intent_llm(text: str, language: str) -> dict:
         assert "confidence" in result
         assert 0.0 <= result["confidence"] <= 1.0
         return result
-    except (Exception, asyncio.TimeoutError, asyncio.CancelledError) as e:
+    except (Exception, asyncio.TimeoutError, asyncio.CancelledError):
         # Fallback to rule-based
         return _classify_intent_fallback(text, language)
 

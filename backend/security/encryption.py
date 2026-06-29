@@ -1,7 +1,6 @@
 import hashlib
 import os
 import hmac
-from typing import Optional
 import structlog
 
 logger = structlog.get_logger()

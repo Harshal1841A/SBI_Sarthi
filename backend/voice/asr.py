@@ -1,4 +1,7 @@
-import os, base64, httpx, structlog, numpy as np
+import os
+import base64
+import httpx
+import structlog
 from utils.circuit_breaker import CircuitBreaker
 
 logger = structlog.get_logger()

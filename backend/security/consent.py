@@ -5,7 +5,7 @@ import hmac as _hmac
 import json
 import time
 import os
-from typing import List, Optional
+from typing import List
 from datetime import datetime
 from contextlib import contextmanager
 

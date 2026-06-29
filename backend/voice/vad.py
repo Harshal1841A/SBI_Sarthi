@@ -2,8 +2,7 @@ import asyncio
 import threading
 import struct
 import numpy as np
-from typing import Optional, Tuple, Dict, List
-from collections import defaultdict
+from typing import Optional, Dict, List
 from voice.asr import ASRClient
 from security.pii_scrubber import scrub_pii
 
