@@ -41,5 +41,7 @@ EXPOSE 7860
 
 WORKDIR /app/backend
 
-# Run uvicorn on port 7860
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "7860", "--workers", "4"]
+# Use a single worker in demo/HF Spaces mode.
+# SQLite checkpointing (AsyncSqliteSaver) does not support concurrent writes
+# from multiple processes; using --workers > 1 causes SQLITE_BUSY errors mid-demo.
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "7860", "--workers", "1"]

@@ -1,3 +1,13 @@
 # Optional requirements for NVIDIA Riva Chatterbox TTS / Parakeet ASR
 nvidia-riva-client>=2.17.0
 grpcio>=1.62.0
+
+# Voice Activity Detection — full Silero VAD (requires PyTorch ~2 GB)
+# Only needed when running the full voice pipeline locally.
+# vad.py uses a lightweight energy-based fallback when this is absent.
+# pip install silero-vad==5.1.2
+silero-vad==5.1.2
+
+# Load testing — dev/CI only, not needed at runtime
+# pip install locust==2.28.0
+locust==2.28.0

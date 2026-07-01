@@ -103,13 +103,28 @@ security = HTTPBearer(auto_error=False)
 
 ACTIVE_DEMO_TOKENS: dict[str, float] = {}
 
+# Ephemeral secret generated at startup when SARTHI_HMAC_SECRET is not set.
+# Safe for demo/HF Spaces: tokens are only valid for the lifetime of the process.
+_EPHEMERAL_HMAC_SECRET: str = ""
+
 def _get_demo_hmac_secret() -> bytes:
-    if not HMAC_SECRET:
+    global _EPHEMERAL_HMAC_SECRET
+    if HMAC_SECRET:
+        return HMAC_SECRET.encode("utf-8")
+    if not DEMO_MODE:
         raise RuntimeError(
-            "SARTHI_HMAC_SECRET is required to mint demo tokens. "
-            "Refusing to fall back to API_TOKEN or a literal."
+            "SARTHI_HMAC_SECRET is required to mint demo tokens outside demo mode. "
+            "Set SARTHI_HMAC_SECRET as an environment variable."
         )
-    return HMAC_SECRET.encode("utf-8")
+    # Demo/HF Spaces fallback: generate a random secret once per process start.
+    # Tokens signed with this secret are invalidated when the container restarts.
+    if not _EPHEMERAL_HMAC_SECRET:
+        _EPHEMERAL_HMAC_SECRET = secrets.token_hex(32)
+        logger.warning(
+            "SARTHI_HMAC_SECRET not set. Using ephemeral secret for demo tokens. "
+            "Set SARTHI_HMAC_SECRET as an HF Space secret for stable tokens across restarts."
+        )
+    return _EPHEMERAL_HMAC_SECRET.encode("utf-8")
 
 def _generate_demo_token() -> str:
     expires = int(time.time() + 3600)
@@ -352,10 +367,14 @@ _DEV_ORIGINS = [
 _ALLOWED_ORIGINS = _PRODUCTION_ORIGINS + _DEV_ORIGINS
 _is_prod = os.environ.get("SARTHI_ENV", "development").lower() == "production"
 
+# HF Spaces serves the SPA from https://<user>-<space>.hf.space
+# The regex must cover that origin in addition to local dev URLs.
+_DEV_ORIGIN_REGEX = r"https?://(localhost|127\.0\.0\.1)(:\d+)?|https://[a-z0-9-]+-[a-z0-9-]+\.hf\.space"
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_PRODUCTION_ORIGINS if _is_prod else _ALLOWED_ORIGINS,
-    allow_origin_regex=None if _is_prod else r"http://(localhost|127\.0\.0\.1)(:\d+)?",
+    allow_origin_regex=None if _is_prod else _DEV_ORIGIN_REGEX,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"] if not _is_prod else ["Authorization", "Content-Type", "X-Request-ID", "X-Sarthi-Token", "X-Sarthi-Supervisor-Token"],
@@ -1086,12 +1105,16 @@ async def get_demo_token():
     if not DEMO_MODE:
         raise HTTPException(status_code=403, detail="Demo mode disabled")
 
-    # Generate a fresh ephemeral stateless demo token with 1 hour TTL
+    # Generate a fresh ephemeral stateless demo token with 1 hour TTL.
+    # The same token is returned for both api_token and supervisor_token so the
+    # frontend can populate sessionStorage['sarthi_supervisor_token'] and show
+    # the read-only Supervisor Dashboard view without requiring real credentials.
     demo_token = _generate_demo_token()
     expires = ACTIVE_DEMO_TOKENS[demo_token]
 
     return {
         "api_token": demo_token,
+        "supervisor_token": demo_token,   # Fix: frontend reads data.supervisor_token
         "scope": "demo:read",
         "demo_user": {
             "user_id": "DEMO_USER_001",
