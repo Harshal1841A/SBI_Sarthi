@@ -155,6 +155,96 @@ def _is_valid_demo_token(token: str) -> bool:
             pass
     return False
 
+# ────────────────────────────────────────────────────────────────
+# Demo scripted responses (used when demo token is detected)
+# ────────────────────────────────────────────────────────────────
+
+_DEMO_SCRIPTS: list[tuple] = [
+    # (keyword_list, intent, response_hi, response_en)
+    (
+        ["account", "khol", "open", "kholna", "खाता", "खोलो", "खोलना"],
+        "account_opening",
+        "Namaste Rajesh ji! Aapka SBI Savings Account kholne ke liye, mujhe kuch details chahiye:\n1. Aadhar card number\n2. PAN card number\n3. Mobile number (OTP ke liye)\n\nAapka Aadhar number enter karein (last 4 digits)?",
+        "Welcome! To open your SBI Savings Account, I need:\n1. Aadhaar card number\n2. PAN card number\n3. Mobile number for OTP\n\nPlease enter your Aadhaar number (last 4 digits)?",
+    ),
+    (
+        ["balance", "kitna", "check", "बैलेंस", "kitna hai", "balanc"],
+        "balance_inquiry",
+        "Rajesh ji, aapka SBI account balance:\n\n💳 Account: SBI**********0123\n💰 Available Balance: ₹1,24,750.00\n📅 Last Transaction: ₹5,000 credited (salary) — aaj\n\nKuch aur help chahiye?",
+        "Your SBI account balance:\n\n💳 Account: SBI**********0123\n💰 Available Balance: ₹1,24,750.00\n📅 Last Transaction: ₹5,000 credited (salary) — today\n\nAnything else I can help you with?",
+    ),
+    (
+        ["loan", "chahiye", "lena", "lakh", "emi", "लोन", "ऋण"],
+        "loan_application",
+        "Rajesh ji, aapka loan request receive ho gaya! 🏦\n\n⚠️ Loan amount 50,000 se zyada hai — iska review SBI officer karega.\n\n📋 Details:\n- Requested Amount: ₹5,00,000\n- Interest Rate: 8.5% p.a. (current)\n- Processing Fee: ₹2,500\n- Status: HITL Queue mein — supervisor approval pending\n\nEk officer 24 hours mein contact karega. Reference ID: LOAN_DEMO_001",
+        "Your loan request has been received! 🏦\n\n⚠️ Loan amount exceeds ₹50,000 — flagged for SBI officer review.\n\n📋 Details:\n- Requested Amount: ₹5,00,000\n- Interest Rate: 8.5% p.a. (current)\n- Processing Fee: ₹2,500\n- Status: Pending supervisor approval (HITL)\n\nAn officer will contact you within 24 hours. Reference ID: LOAN_DEMO_001",
+    ),
+    (
+        ["card", "block", "band", "karo", "stop", "cardblock", "ब्लॉक"],
+        "card_block",
+        "Rajesh ji, aapka debit card TURANT block kar diya gaya! 🔒\n\n✅ Card **** **** **** 5678 block ho gaya\n📱 SMS confirmation: +91-98765-43210 pe bheja gaya\n📞 Nayi card ke liye: 1800-11-2211 pe call karein\n\nKya aapko replacement card chahiye?",
+        "Your debit card has been blocked immediately! 🔒\n\n✅ Card **** **** **** 5678 blocked successfully\n📱 SMS confirmation sent to +91-98765-43210\n📞 For replacement: Call 1800-11-2211\n\nWould you like to request a replacement card?",
+    ),
+    (
+        ["transfer", "send", "bhejo", "paisa", "money", "upi", "neft", "imps"],
+        "fund_transfer",
+        "Fund transfer ke liye:\n\n1️⃣ Beneficiary ka account number enter karein\n2️⃣ IFSC code\n3️⃣ Amount (max ₹2,00,000 per day)\n4️⃣ OTP verify karein\n\n⚡ IMPS (Instant) ya NEFT (2 hours) - aapki choice?\n\nNote: Demo mode mein actual transfer nahi hoga.",
+        "For fund transfer:\n\n1️⃣ Enter beneficiary account number\n2️⃣ IFSC code\n3️⃣ Amount (max ₹2,00,000 per day)\n4️⃣ Verify OTP\n\n⚡ IMPS (Instant) or NEFT (2 hours) - your choice?\n\nNote: No actual transfer in demo mode.",
+    ),
+    (
+        ["kyc", "document", "update", "verify", "aadhaar", "aadhar", "आधार", "pan"],
+        "kyc_update",
+        "KYC update process:\n\n📄 Required documents:\n1. Aadhaar Card (front + back)\n2. PAN Card\n3. Recent photo\n\n🤖 AI-powered document verification (< 30 sec)\n✅ Auto-fill from QR code\n\nAbhi upload karein ya branch visit karein? SBI branches SBI.co.in pe milenge.",
+        "KYC update process:\n\n📄 Required documents:\n1. Aadhaar Card (front + back)\n2. PAN Card\n3. Recent photo\n\n🤖 AI-powered verification (< 30 sec)\n✅ Auto-fill from QR code\n\nUpload now or visit branch? Find SBI branches at SBI.co.in",
+    ),
+]
+
+_DEMO_DEFAULT_HI = (
+    "Namaste! Main Sarthi hoon, aapka SBI AI banking saathi. 🏦\n\n"
+    "Main inke baare mein help kar sakta hoon:\n"
+    "• 💰 Balance check\n• 🏦 Account opening\n• 💳 Card block\n"
+    "• 🏛️ Loan application\n• 💸 Fund transfer\n• 📄 KYC update\n\n"
+    "Kya chahiye aapko?"
+)
+_DEMO_DEFAULT_EN = (
+    "Namaste! I am Sarthi, your SBI AI banking assistant. 🏦\n\n"
+    "I can help you with:\n"
+    "• 💰 Balance check\n• 🏦 Account opening\n• 💳 Card block\n"
+    "• 🏛️ Loan application\n• 💸 Fund transfer\n• 📄 KYC update\n\n"
+    "What can I help you with today?"
+)
+
+
+def _demo_chat_response(message: str, language: str) -> dict:
+    """Return a scripted demo response without running the LangGraph.
+
+    Used when the request carries a valid demo token so that HF Spaces
+    demos work without Redis / Postgres / external LLM APIs.
+    """
+    msg_lower = message.lower()
+    use_hi = language in ("hi", "mr", "bn", "ta", "te", "ml", "gu")
+
+    for keywords, intent, resp_hi, resp_en in _DEMO_SCRIPTS:
+        if any(kw in msg_lower for kw in keywords):
+            return {
+                "response_text": resp_hi if use_hi else resp_en,
+                "current_intent": intent,
+                "confidence_score": 0.95,
+                "interrupted": intent == "loan_application",
+                "shield_flags": [],
+                "risk_score": 0.6 if intent == "loan_application" else 0.0,
+            }
+
+    return {
+        "response_text": _DEMO_DEFAULT_HI if use_hi else _DEMO_DEFAULT_EN,
+        "current_intent": "general_chat",
+        "confidence_score": 0.85,
+        "interrupted": False,
+        "shield_flags": [],
+        "risk_score": 0.0,
+    }
+
+
 def verify_api_token(request: Request, creds: Optional[HTTPAuthorizationCredentials] = Depends(security)) -> None:
     """Validate Bearer token for standard API endpoints."""
     token = request.headers.get("X-Sarthi-Token") or (creds.credentials if creds else None)
@@ -681,7 +771,32 @@ async def process_chat_message(msg: ChatMessage, request: Request):
             risk_score=1.0,
             language=msg.language
         )
-    
+
+    # ── Demo mode fast-path ──────────────────────────────────────
+    # When the request carries a valid demo token we return scripted
+    # responses without touching the LangGraph / Redis / Postgres stack.
+    # This ensures the HF Spaces demo always works even when external
+    # services are unavailable.
+    _auth_token = (
+        request.headers.get("X-Sarthi-Token")
+        or request.headers.get("Authorization", "").removeprefix("Bearer ").strip()
+    )
+    if DEMO_MODE and _is_valid_demo_token(_auth_token):
+        start_time = time.time()
+        result = _demo_chat_response(scrubbed, msg.language)
+        latency = time.time() - start_time
+        REQUEST_LATENCY.labels(endpoint="/chat/message").observe(latency)
+        return ChatResponse(
+            response=result["response_text"],
+            intent=result["current_intent"],
+            confidence=result["confidence_score"],
+            requires_hitl=result["interrupted"],
+            shield_flags=result["shield_flags"],
+            risk_score=result["risk_score"],
+            language=msg.language
+        )
+    # ── End demo fast-path ───────────────────────────────────────
+
     # Invoke graph
     graph = get_graph()
     
@@ -1135,56 +1250,72 @@ async def seed_demo_data(_=Depends(verify_api_token)):
     - A demo onboarding thread (Aadhaar collected, waiting for PAN)
     - A demo HITL approval (loan > 50K awaiting supervisor)
     - A demo audit trail with sample events
+
+    Graph invocations are best-effort: if SQLite/Redis is unavailable on
+    HF Spaces the endpoint still returns 200 so the frontend can proceed.
     """
     if not DEMO_MODE:
         raise HTTPException(status_code=403, detail="Demo mode disabled")
+
+    seeded_threads = []
     graph = get_graph()
     
     # 1. Seed an onboarding thread at "collect_pan" step
     thread_id = "demo_onboarding_001"
-    await graph.ainvoke(
-        {
-            "session_id": thread_id,
-            "messages": [{"role": "user", "content": "Account kholna hai"}],
-            "language": "hi",
-            "onboarding_step": "collect_pan",
-            "aadhaar_number": "a1b2c3d4e5f6...",  # hashed
-            "aadhaar_last4": "0123",
-            "status": "RUNNING",
-            "completed_steps": ["create_profile"]
-        },
-        config={"configurable": {"thread_id": thread_id}}
-    )
+    try:
+        await graph.ainvoke(
+            {
+                "session_id": thread_id,
+                "messages": [{"role": "user", "content": "Account kholna hai"}],
+                "language": "hi",
+                "onboarding_step": "collect_pan",
+                "aadhaar_number": "a1b2c3d4e5f6...",  # hashed
+                "aadhaar_last4": "0123",
+                "status": "RUNNING",
+                "completed_steps": ["create_profile"]
+            },
+            config={"configurable": {"thread_id": thread_id}}
+        )
+        seeded_threads.append(thread_id)
+    except Exception as e:
+        logger.warning(f"Demo seed: onboarding thread failed (expected in HF Spaces): {e}")
     
     # 2. Seed a HITL-interrupted loan thread
     loan_thread = "demo_loan_hitl_001"
-    await graph.ainvoke(
-        {
-            "session_id": loan_thread,
-            "messages": [{"role": "user", "content": "Mujhe 5 lakh ka loan chahiye"}],
-            "language": "hi",
-            "current_intent": "loan_application",
-            "interrupted": True,
-            "interrupt_reason": "loan_amount_exceeds_50k",
-            "requires_hitl": True,
-            "status": "INTERRUPTED",
-            "risk_score": 0.6
-        },
-        config={"configurable": {"thread_id": loan_thread}}
-    )
+    try:
+        await graph.ainvoke(
+            {
+                "session_id": loan_thread,
+                "messages": [{"role": "user", "content": "Mujhe 5 lakh ka loan chahiye"}],
+                "language": "hi",
+                "current_intent": "loan_application",
+                "interrupted": True,
+                "interrupt_reason": "loan_amount_exceeds_50k",
+                "requires_hitl": True,
+                "status": "INTERRUPTED",
+                "risk_score": 0.6
+            },
+            config={"configurable": {"thread_id": loan_thread}}
+        )
+        seeded_threads.append(loan_thread)
+    except Exception as e:
+        logger.warning(f"Demo seed: loan HITL thread failed (expected in HF Spaces): {e}")
     
     # 3. Seed audit trail
-    create_audit_artifact(
-        event_type="agent_decision",
-        session_id="demo_seed",
-        agent_name="system",
-        decision={"action": "seed_demo_data", "threads_created": 2},
-        state_snapshot={"demo_mode": True}
-    )
+    try:
+        create_audit_artifact(
+            event_type="agent_decision",
+            session_id="demo_seed",
+            agent_name="system",
+            decision={"action": "seed_demo_data", "threads_created": len(seeded_threads)},
+            state_snapshot={"demo_mode": True}
+        )
+    except Exception as e:
+        logger.warning(f"Demo seed: audit artifact failed: {e}")
     
     return {
         "seeded": True,
-        "threads": [thread_id, loan_thread],
+        "threads": seeded_threads,
         "message": "Demo data seeded. Check Supervisor Dashboard for HITL queue."
     }
 

@@ -56,12 +56,12 @@ export default function AuditLogViewer() {
 
   const getEventColor = (type: string) => {
     switch (type) {
-      case 'shield_block': return 'bg-error/10 border-error/20 text-error';
-      case 'shield_flag': return 'bg-amber-500/10 border-amber-500/20 text-amber-600';
-      case 'hitl_approval': return 'bg-green-500/10 border-green-500/20 text-green-600';
-      case 'hitl_interrupt': return 'bg-amber-500/10 border-amber-500/20 text-amber-600';
-      case 'consent_grant': return 'bg-primary/10 border-primary/20 text-primary';
-      default: return 'bg-surface-container border-outline-variant/30 text-on-surface';
+      case 'shield_block': return 'bg-error/10 border-error/20 text-error dark:text-red-400';
+      case 'shield_flag': return 'bg-amber-500/10 border-amber-500/20 text-amber-600 dark:text-amber-400';
+      case 'hitl_approval': return 'bg-green-500/10 border-green-500/20 text-green-600 dark:text-green-400';
+      case 'hitl_interrupt': return 'bg-amber-500/10 border-amber-500/20 text-amber-600 dark:text-amber-400';
+      case 'consent_grant': return 'bg-primary/10 border-primary/20 text-primary dark:text-primary-fixed-dim';
+      default: return 'bg-surface-container dark:bg-dark-surface-container border-outline-variant/30 text-on-surface';
     }
   };
 
