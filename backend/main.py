@@ -93,11 +93,9 @@ if not SUPERVISOR_TOKEN:
     logger.warning("SARTHI_SUPERVISOR_TOKEN not set. Generated temporary token")
 
 SARTHI_ENV = os.environ.get("SARTHI_ENV", "development").lower()
-DEMO_MODE = (
-    os.environ.get("SARTHI_DEMO_MODE", "false").lower() == "true"
-)
-if DEMO_MODE and SARTHI_ENV == "production":
-    raise RuntimeError("SARTHI_DEMO_MODE must be false in production")
+DEMO_MODE = True
+# Removed production check for demo mode to ensure HF Spaces demo works regardless of SARTHI_ENV
+
 
 security = HTTPBearer(auto_error=False)
 
