@@ -36,8 +36,8 @@ async def hitl_pause_node(state: SarthiState) -> dict:
     lang = state.get("language", "en")
     responses = {
         "en": "Your request requires human review for security and compliance. An SBI officer is reviewing your case. This typically takes 2-5 minutes. Please stay connected.",
-        "hi": "Aapki request suraksha aur compliance ke liye human review mein hai. Ek SBI adhikari aapka case dekh raha hai. Ye aam taur par 2-5 minute leta hai. Kripaya jude rahein.",
-        "mr": "Tumchi request suraksha ani compliance sathi human review madhye ahe. Ek SBI adhikari tumcha case pahat ahe. He samanyapane 2-5 minute ghete. Kripaya jodle raha."
+        "hi": "आपकी रिक्वेस्ट सुरक्षा और कंप्लायंस के लिए ह्यूमन रिव्यू में है। एक SBI अधिकारी आपका केस देख रहा है। यह आमतौर पर 2-5 मिनट लेता है। कृपया जुड़े रहें।",
+        "mr": "तुमची रिक्वेस्ट सुरक्षा आणि कंप्लायन्ससाठी ह्यूमन रिव्ह्यू मध्ये आहे. एक SBI अधिकारी तुमची केस पाहत आहे. यास साधारणपणे २-५ मिनिटे लागतात. कृपया जोडलेले राहा."
     }
     
     return {
@@ -115,8 +115,8 @@ def _resume_vkyc(state: SarthiState, approver_id: str) -> dict:
     
     responses = {
         "en": "Video verification approved! Your account is now fully verified. Let's proceed with the final steps.",
-        "hi": "Video verification manjur ho gaya! Aapka khata ab fully verified hai. Aage ke steps shuru karte hain.",
-        "mr": "Video verification manjur zale! Tumche khata atta purnapane verify zale. Shevdtche step suru karuya."
+        "hi": "वीडियो वेरिफिकेशन मंजूर हो गया! आपका खाता अब पूरी तरह से वेरिफाइड है। आगे के स्टेप्स शुरू करते हैं।",
+        "mr": "व्हिडिओ व्हेरिफिकेशन मंजूर झाले! तुमचे खाते आता पूर्णपणे व्हेरिफाय झाले आहे. पुढचे स्टेप्स सुरू करूया."
     }
     
     return {
@@ -138,8 +138,8 @@ def _resume_loan(state: SarthiState, approver_id: str) -> dict:
     
     responses = {
         "en": f"Congratulations! Your loan of Rs. {loan_amount:,} is sanctioned by officer {approver_id}. Loan ID: {loan_id}. Disbursement will happen within 24 hours.",
-        "hi": f"Badhai ho! Aapka Rs. {loan_amount:,} ka loan adhikari {approver_id} dwara manjur ho gaya. Loan ID: {loan_id}. Rakam 24 ghante mein jama ho jayegi.",
-        "mr": f"Abhinandan! Tumche Rs. {loan_amount:,} che loan adhikari {approver_id} dware manjur zale. Loan ID: {loan_id}. Rakam 24 tasat jama honar."
+        "hi": f"बधाई हो! आपका Rs. {loan_amount:,} का लोन अधिकारी {approver_id} द्वारा मंजूर हो गया है। लोन ID: {loan_id}। रकम 24 घंटे में जमा हो जाएगी।",
+        "mr": f"अभिनंदन! तुमचे Rs. {loan_amount:,} चे लोन अधिकारी {approver_id} द्वारे मंजूर झाले आहे. लोन ID: {loan_id}। रक्कम २४ तासात जमा होईल."
     }
     
     return {
@@ -156,8 +156,8 @@ def _resume_fraud_action(state: SarthiState, approver_id: str) -> dict:
     
     responses = {
         "en": f"Your card has been blocked by officer {approver_id} for your security. A new card will be dispatched within 3 working days. Chargeback process initiated.",
-        "hi": f"Aapka card adhikari {approver_id} dwara suraksha ke liye block kar diya gaya hai. Naya card 3 working days mein bheja jayega. Chargeback process shuru ho gaya hai.",
-        "mr": f"Tumche card adhikari {approver_id} dware surakshite sathi block kele gele. Nave card 3 working daysat pathavle jael. Chargeback process suru zale."
+        "hi": f"आपका कार्ड अधिकारी {approver_id} द्वारा सुरक्षा के लिए ब्लॉक कर दिया गया है। नया कार्ड 3 वर्किंग डेज में भेजा जाएगा। चार्ज बैक प्रोसेस शुरू हो गया है।",
+        "mr": f"तुमचे कार्ड अधिकारी {approver_id} द्वारे सुरक्षेसाठी ब्लॉक केले गेले आहे. नवीन कार्ड ३ वर्किंग डेजमध्ये पाठवले जाईल. चार्ज बॅक प्रोसेस सुरू झाली आहे."
     }
     
     return {
@@ -174,8 +174,8 @@ def _generic_resume(state: SarthiState, approver_id: str) -> dict:
     
     responses = {
         "en": "Your request has been approved. Proceeding now.",
-        "hi": "Aapki request manjur ho gayi hai. Ab aage badh rahe hain.",
-        "mr": "Tumchi request manjur zaleli ahe. Aata pudhe jat ahe."
+        "hi": "आपकी रिक्वेस्ट मंजूर हो गई है। अब आगे बढ़ रहे हैं।",
+        "mr": "तुमची रिक्वेस्ट मंजूर झाली आहे. आता पुढे जात आहे."
     }
     
     return {
@@ -192,8 +192,8 @@ def _get_rejection_message(state: SarthiState) -> str:
     
     responses = {
         "en": "Your request has been reviewed and could not be approved at this time. Please visit your nearest SBI branch for assistance.",
-        "hi": "Aapki request review ki gayi hai aur is samay manjur nahi ki ja sakti. Kripya madad ke liye apne najdiki SBI branch visit karein.",
-        "mr": "Tumchi request review keli geleli ahe ani ya veli manjur kili ja shakat nahi. Kripaya madati sathi tumche javalatil SBI branch visit kara."
+        "hi": "आपकी रिक्वेस्ट रिव्यू की गई है और इस समय मंजूर नहीं की जा सकती। कृपया मदद के लिए अपनी नज़दीकी SBI ब्रांच विजिट करें।",
+        "mr": "तुमची रिक्वेस्ट रिव्ह्यू केली गेली आहे आणि यावेळी मंजूर केली जाऊ शकत नाही. कृपया मदतीसाठी तुमच्या जवळील SBI ब्रांचला भेट द्या."
     }
     
     return responses.get(lang, responses["en"])

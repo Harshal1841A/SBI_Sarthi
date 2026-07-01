@@ -86,8 +86,8 @@ def _handle_block(state: SarthiState, guard_result: dict) -> dict:
     
     responses = {
         "en": "I cannot process this request for security reasons. If you need assistance, please contact your nearest SBI branch or call 1800-11-2211.",
-        "hi": "Suraksha karanon se main ye request process nahi kar sakta. Agar madad chahiye, toh apne najdiki SBI branch se sampark karein ya 1800-11-2211 par call karein.",
-        "mr": "Surakshatecha karanani mi hi request process karu shakat nahi. Jar madad pahije tar tumchya javalatil SBI branch shi sampark kara kiva 1800-11-2211 var call kara."
+        "hi": "सुरक्षा कारणों से मैं यह अनुरोध प्रोसेस नहीं कर सकता। अगर मदद चाहिए, तो अपनी नज़दीकी SBI ब्रांच से संपर्क करें या 1800-11-2211 पर कॉल करें।",
+        "mr": "सुरक्षा कारणांमुळे मी ही विनंती प्रोसेस करू शकत नाही. जर मदत हवी असेल तर तुमच्या जवळील SBI ब्रांचशी संपर्क साधा किंवा 1800-11-2211 वर कॉल करा."
     }
     
     return {
@@ -106,8 +106,8 @@ def _handle_rewrite(state: SarthiState, guard_result: dict) -> dict:
     # For prototype: return safe fallback message
     responses = {
         "en": "I can only provide general information about SBI products. For specific rates and terms, please visit sbi.co.in or visit your branch.",
-        "hi": "Main SBI products ke baare mein sirf general jankari de sakta hoon. Specific rates aur terms ke liye kripya sbi.co.in par jayein ya apne branch visit karein.",
-        "mr": "Mi SBI utpadanenchyabaddal fakt general mahiti deu shakto. Specific dar ani terms sathi kripaya sbi.co.in var ja kiva tumche branch visit kara."
+        "hi": "मैं SBI उत्पादों के बारे में सिर्फ सामान्य जानकारी दे सकता हूँ। स्पेसिफिक रेट्स और टर्म्स के लिए कृपया sbi.co.in पर जाएं या अपनी ब्रांच विजिट करें।",
+        "mr": "मी SBI उत्पादनांबद्दल फक्त सामान्य माहिती देऊ शकतो. स्पेसिफिक दर आणि टर्म्ससाठी कृपया sbi.co.in वर जा किंवा तुमच्या ब्रांचला भेट द्या."
     }
     
     return {
@@ -132,8 +132,8 @@ def _handle_escalate(state: SarthiState, guard_result: dict) -> dict:
     
     responses = {
         "en": "This request requires human review for your security. I'm connecting you to an SBI officer. Please wait.",
-        "hi": "Ye request aapki suraksha ke liye human review mein hai. Main aapko SBI adhikari se jod raha hoon. Kripaya pratiksha karein.",
-        "mr": "Hi request tumchya surakshite sathi human review madhye ahe. Mi tumhala SBI adhikaryashi jodat ahe. Kripaya pratiksha kara."
+        "hi": "यह अनुरोध आपकी सुरक्षा के लिए ह्यूमन रिव्यू में है। मैं आपको SBI अधिकारी से जोड़ रहा हूँ। कृपया प्रतीक्षा करें।",
+        "mr": "ही विनंती तुमच्या सुरक्षेसाठी ह्यूमन रिव्ह्यू मध्ये आहे. मी तुम्हाला SBI अधिकाऱ्याशी जोडत आहे. कृपया प्रतीक्षा करा."
     }
     
     return {

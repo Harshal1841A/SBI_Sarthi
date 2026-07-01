@@ -57,8 +57,8 @@ def _welcome_onboarding(state: SarthiState) -> dict:
     
     responses = {
         "en": "Welcome to SBI! I am Sarthi, your digital banking assistant. To open your account, I'll need your Aadhaar and PAN. Let's start with your Aadhaar number.",
-        "hi": "SBI mein aapka swagat hai! Main Sarthi hoon, aapka digital banking saathi. Khata kholne ke liye mujhe aapka Aadhaar aur PAN chahiye. Aadhaar number se shuru karte hain.",
-        "mr": "SBI madhye tumche svagat! Mi Sarthi ahe, tumcha digital banking saathi. Khata ugadnyasathi tumcha Aadhaar ani PAN havet. Aadhaar number ne suru karuya."
+        "hi": "SBI में आपका स्वागत है! मैं सारथी हूँ, आपका डिजिटल बैंकिंग साथी। खाता खोलने के लिए मुझे आपका आधार और PAN चाहिए। आधार नंबर से शुरू करते हैं।",
+        "mr": "SBI मध्ये आपले स्वागत आहे! मी सारथी आहे, तुमचा डिजिटल बँकिंग साथी. खाते उघडण्यासाठी मला तुमचा आधार आणि PAN हवा आहे. आधार नंबरने सुरुवात करूया."
     }
     
     return {
@@ -88,8 +88,8 @@ def _process_aadhaar(state: SarthiState, user_text: str) -> dict:
         # User hasn't provided Aadhaar yet — ask again
         responses = {
             "en": "Please provide your 12-digit Aadhaar number. It will be securely verified.",
-            "hi": "Kripya apna 12-digit Aadhaar number bataiye. Ye surakshit tareeke se verify kiya jayega.",
-            "mr": "Kripaya tumcha 12-anki Aadhaar number sanga. Te surakshit riitaya verify kela jael."
+            "hi": "कृपया अपना 12-डिजिट आधार नंबर बताइए। यह सुरक्षित तरीके से वेरीफाई किया जाएगा।",
+            "mr": "कृपया तुमचा १२-अंकी आधार नंबर सांगा. तो सुरक्षितपणे व्हेरीफाय केला जाईल."
         }
         return {
             "response_text": responses.get(lang, responses["en"]),
@@ -111,8 +111,8 @@ def _process_aadhaar(state: SarthiState, user_text: str) -> dict:
         
         responses = {
             "en": f"The Aadhaar number you provided is invalid: {validation.get('error')}. Please check and try again.",
-            "hi": f"Aapka Aadhaar number galat hai: {validation.get('error')}. Kripya check karke dobara koshish karein.",
-            "mr": f"Tumcha Aadhaar number chukicha ahe: {validation.get('error')}. Kripaya tapasaun parat prayatna kara."
+            "hi": f"आपका आधार नंबर गलत है: {validation.get('error')}। कृपया चेक करके दोबारा कोशिश करें।",
+            "mr": f"तुमचा आधार नंबर चुकीचा आहे: {validation.get('error')}. कृपया तपासून पुन्हा प्रयत्न करा."
         }
         return {
             "response_text": responses.get(lang, responses["en"]),
@@ -134,8 +134,8 @@ def _process_aadhaar(state: SarthiState, user_text: str) -> dict:
     
     responses = {
         "en": f"Aadhaar verified (ending in {validation['last4']}). Now please provide your PAN number.",
-        "hi": f"Aadhaar verify ho gaya (antim 4 ank: {validation['last4']}). Ab apna PAN number dijiye.",
-        "mr": f"Aadhaar verify zala (shivtche 4 ank: {validation['last4']}). Aata tumcha PAN number dya."
+        "hi": f"आधार वेरीफाई हो गया (अंतिम 4 अंक: {validation['last4']})। अब अपना PAN नंबर दीजिए।",
+        "mr": f"आधार व्हेरीफाय झाला (शेवटचे ४ अंक: {validation['last4']}). आता तुमचा PAN नंबर द्या."
     }
     
     return {
@@ -158,8 +158,8 @@ def _process_pan(state: SarthiState, user_text: str) -> dict:
     if not pan_match:
         responses = {
             "en": "Please provide your PAN number in format AAAAA9999A.",
-            "hi": "Kripya apna PAN number format AAAAA9999A mein dijiye.",
-            "mr": "Kripaya tumcha PAN number AAAAA9999A format madhe dya."
+            "hi": "कृपया अपना PAN नंबर फॉर्मेट AAAAA9999A में दीजिए।",
+            "mr": "कृपया तुमचा PAN नंबर AAAAA9999A फॉरमॅटमध्ये द्या."
         }
         return {
             "response_text": responses.get(lang, responses["en"]),
@@ -189,8 +189,8 @@ def _process_pan(state: SarthiState, user_text: str) -> dict:
 
     responses = {
         "en": "PAN verified. Proceeding to eKYC verification. This will take a moment.",
-        "hi": "PAN verify ho gaya. eKYC verification process ho raha hai. Thoda intezar karein.",
-        "mr": "PAN verify zala. eKYC verification process suru ahe. Thoda pratiksha kara."
+        "hi": "PAN वेरीफाई हो गया। eKYC वेरिफिकेशन प्रोसेस हो रहा है। थोड़ा इंतज़ार करें।",
+        "mr": "PAN व्हेरीफाय झाला. eKYC व्हेरिफिकेशन प्रोसेस सुरू आहे. थोडी प्रतीक्षा करा."
     }
 
     return {
@@ -227,8 +227,8 @@ def _process_ekyc(state: SarthiState) -> dict:
     
     responses = {
         "en": "eKYC verification successful. Now I need your consent for data usage. This is required by law.",
-        "hi": "eKYC verification safal raha. Ab mujhe aapka data usage ke liye consent chahiye. Ye kanooni zaroorat hai.",
-        "mr": "eKYC verification yashasvi zale. Aata mala tumcha data vaparnyasathi consent havet. He kanoni garaj ahe."
+        "hi": "eKYC वेरिफिकेशन सफल रहा। अब मुझे आपके डेटा यूसेज के लिए कंसेंट चाहिए। यह कानूनी ज़रूरत है।",
+        "mr": "eKYC व्हेरिफिकेशन यशस्वी झाले. आता मला तुमचा डेटा वापरण्यासाठी संमती हवी आहे. ही कायदेशीर गरज आहे."
     }
     
     return {
@@ -293,8 +293,8 @@ def _process_consent(state: SarthiState, user_text: str) -> dict:
         if next_purpose == "P001" and not granted:
             responses = {
                 "en": "We cannot open an account without KYC consent. If you change your mind, please visit any SBI branch or the YONO app.",
-                "hi": "KYC consent ke bina hum khata nahi khol sakte. Agar aapka man badle, toh kisi SBI branch ya YONO app par aaiye.",
-                "mr": "KYC consent shivay aamhi khata ugadu shakat nahi. Jar tumhala vichar badalala tar koni SBI branch kiva YONO app var ya."
+                "hi": "KYC कंसेंट के बिना हम खाता नहीं खोल सकते। अगर आपका मन बदले, तो किसी SBI ब्रांच या YONO ऐप पर आइए।",
+                "mr": "KYC संमतीशिवाय आम्ही खाते उघडू शकत नाही. जर तुमचा विचार बदलला तर कोणत्याही SBI ब्रांच किंवा YONO ॲपवर या."
             }
             return {
                 "response_text": responses.get(lang, responses["en"]),
@@ -357,8 +357,8 @@ def _proceed_to_vkyc(state: SarthiState) -> dict:
     
     responses = {
         "en": "All consents recorded. As per RBI rules, you need a 2-minute video verification with an SBI officer. I am connecting you now.",
-        "hi": "Saare consents record kar liye gaye hain. RBI niyam ke anusar, aapko 2-minute ka video verification SBI adhikari se karna hoga. Main aapko jod raha hoon.",
-        "mr": "Sarve consent record kelelet. RBI niyamannusar, tumhala 2-minitancha video verification SBI adhikaryashi karava lage. Mi tumhala jodat ahe."
+        "hi": "सारे कंसेंट्स रिकॉर्ड कर लिए गए हैं। RBI नियम के अनुसार, आपको 2-मिनट का वीडियो वेरिफिकेशन SBI अधिकारी से करना होगा। मैं आपको जोड़ रहा हूँ।",
+        "mr": "सर्व संमती रेकॉर्ड केल्या गेल्या आहेत. RBI नियमानुसार, तुम्हाला २-मिनिटांचे व्हिडिओ व्हेरिफिकेशन SBI अधिकाऱ्यासोबत करावे लागेल. मी तुम्हाला जोडत आहे."
     }
     
     return {
@@ -389,8 +389,8 @@ def _process_vkyc(state: SarthiState) -> dict:
     # V-KYC approved — proceed to funding
     responses = {
         "en": "Video verification complete! Now let's fund your account with the minimum balance of Rs. 500.",
-        "hi": "Video verification pura ho gaya! Ab aapke khata mein Rs. 500 ka minimum balance jama karte hain.",
-        "mr": "Video verification purna zale! Aata aaplya khatavar Rs. 500 minimum balance jama karuya."
+        "hi": "वीडियो वेरिफिकेशन पूरा हो गया! अब आपके खाते में Rs. 500 का मिनिमम बैलेंस जमा करते हैं।",
+        "mr": "व्हिडिओ व्हेरिफिकेशन पूर्ण झाले! आता तुमच्या खात्यात Rs. 500 चा मिनिमम बॅलन्स जमा करूया."
     }
     
     return {
@@ -418,8 +418,8 @@ def _process_funding(state: SarthiState, user_text: str) -> dict:
     
     responses = {
         "en": f"Congratulations! Your savings account is now open. Account number: {account_id}. Your initial deposit of Rs. 500 has been credited. Welcome to SBI!",
-        "hi": f"Badhai ho! Aapka bachat khata khul gaya hai. Khata number: {account_id}. Aapka Rs. 500 ka shuruati jama ho gaya hai. SBI mein swagat hai!",
-        "mr": f"Abhinandan! Tumcha bachat khata ugadle ahe. Khata kramank: {account_id}. Tumche Rs. 500 che suruvatiche jama zalelet. SBI madhye svagat!"
+        "hi": f"बधाई हो! आपका बचत खाता खुल गया है। खाता नंबर: {account_id}। आपका Rs. 500 का शुरुआती जमा हो गया है। SBI में स्वागत है!",
+        "mr": f"अभिनंदन! तुमचे बचत खाते उघडले आहे. खाते क्रमांक: {account_id}. तुमचे Rs. 500 चे सुरुवातीचे जमा झाले आहे. SBI मध्ये स्वागत!"
     }
     
     return {
@@ -451,8 +451,8 @@ def _process_loan(state: SarthiState, user_text: str) -> dict:
         
         responses = {
             "en": f"Your loan application for Rs. {loan_amount:,} is being reviewed by an SBI officer. This is required for loans above Rs. 50,000. Please wait.",
-            "hi": f"Aapka Rs. {loan_amount:,} ka loan application SBI adhikari ke review mein hai. Rs. 50,000 se zyada ke loans ke liye ye zaroori hai. Kripya pratiksha karein.",
-            "mr": f"Tumche Rs. {loan_amount:,} che loan application SBI adhikaryanchya review madhye ahe. Rs. 50,000 peksha jast loans sathi he garajeche ahe. Kripaya pratiksha kara."
+            "hi": f"आपका Rs. {loan_amount:,} का लोन एप्लीकेशन SBI अधिकारी के रिव्यू में है। Rs. 50,000 से ज़्यादा के लोन के लिए यह ज़रूरी है। कृपया प्रतीक्षा करें।",
+            "mr": f"तुमचे Rs. {loan_amount:,} चे लोन ॲप्लिकेशन SBI अधिकाऱ्याच्या रिव्ह्यू मध्ये आहे. Rs. 50,000 पेक्षा जास्त लोनसाठी हे आवश्यक आहे. कृपया प्रतीक्षा करा."
         }
         
         return {
@@ -468,8 +468,8 @@ def _process_loan(state: SarthiState, user_text: str) -> dict:
     
     responses = {
         "en": f"Loan sanctioned! Loan ID: {loan_id}. Amount: Rs. {loan_amount:,}. Interest rate: 8.5%. EMI details will be sent via SMS.",
-        "hi": f"Loan manjur ho gaya! Loan ID: {loan_id}. Rakam: Rs. {loan_amount:,}. Byaj dar: 8.5%. EMI details SMS par bhej diye jayenge.",
-        "mr": f"Loan manjur zale! Loan ID: {loan_id}. Rakam: Rs. {loan_amount:,}. Vyaj dar: 8.5%. EMI details SMS var pathavle jatil."
+        "hi": f"लोन मंजूर हो गया! लोन ID: {loan_id}। रकम: Rs. {loan_amount:,}। ब्याज दर: 8.5%। EMI डिटेल्स SMS पर भेज दिए जाएंगे।",
+        "mr": f"लोन मंजूर झाले! लोन ID: {loan_id}. रक्कम: Rs. {loan_amount:,}. व्याज दर: 8.5%. EMI डिटेल्स SMS वर पाठवले जातील."
     }
     
     return {
@@ -484,8 +484,8 @@ def _default_acquisition_response(state: SarthiState) -> dict:
     
     responses = {
         "en": "I'm here to help you open an account or apply for a loan. What would you like to do?",
-        "hi": "Main aapka khata kholne ya loan apply karne mein madad kar sakta hoon. Aap kya karna chahenge?",
-        "mr": "Mi tumhala khata ugadnyat kiva loan apply karanyat madat karu shakto. Tumhala kay karayche ahe?"
+        "hi": "मैं आपका खाता खोलने या लोन अप्लाई करने में मदद कर सकता हूँ। आप क्या करना चाहेंगे?",
+        "mr": "मी तुम्हाला खाते उघडण्यात किंवा लोन अप्लाय करण्यात मदत करू शकतो. तुम्हाला काय करायचे आहे?"
     }
     
     return {

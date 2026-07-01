@@ -111,8 +111,8 @@ def _handle_product_inquiry(state: SarthiState) -> dict:
     
     responses = {
         "en": f"{product_info['name']}: Interest rate {product_info.get('rate', 'N/A')}% per annum. Would you like to apply?",
-        "hi": f"{product_info['name']}: Byaj dar {product_info.get('rate', 'N/A')}% prati varsh. Kya aap apply karna chahenge?",
-        "mr": f"{product_info['name']}: Vyaj dar {product_info.get('rate', 'N/A')}% prati varsh. Tumhi apply karu ichchita ka?"
+        "hi": f"{product_info['name']}: ब्याज दर {product_info.get('rate', 'N/A')}% प्रति वर्ष। क्या आप अप्लाई करना चाहेंगे?",
+        "mr": f"{product_info['name']}: व्याज दर {product_info.get('rate', 'N/A')}% प्रति वर्ष. तुम्ही अप्लाय करू इच्छिता का?"
     }
     
     create_audit_artifact(
@@ -144,8 +144,8 @@ def _handle_savings_recommendation(state: SarthiState) -> dict:
     
     responses = {
         "en": f"SBI Recurring Deposit: Rs. {monthly:,}/month for {months//12} years at {rate}% = Rs. {maturity:,} maturity. Perfect for education fund! Apply now?",
-        "hi": f"SBI Recurring Deposit: Rs. {monthly:,}/mahina, {months//12} saal, {rate}% byaj = Rs. {maturity:,} maturity. Shikshan fund ke liye behtarin! Abhi apply karein?",
-        "mr": f"SBI Recurring Deposit: Rs. {monthly:,}/mahina, {months//12} varsh, {rate}% vyaj = Rs. {maturity:,} maturity. Shikshan fund sathi uttam! Atta apply kara?"
+        "hi": f"SBI रिकरिंग डिपॉजिट: Rs. {monthly:,}/महीना, {months//12} साल, {rate}% ब्याज = Rs. {maturity:,} मैच्योरिटी। एजुकेशन फण्ड के लिए बेहतरीन! अभी अप्लाई करें?",
+        "mr": f"SBI रिकरिंग डिपॉझिट: Rs. {monthly:,}/महिना, {months//12} वर्षे, {rate}% व्याज = Rs. {maturity:,} मॅच्युरिटी. एज्युकेशन फण्डसाठी उत्तम! आत्ता अप्लाय करा?"
     }
     
     return {
@@ -183,8 +183,8 @@ def _handle_transaction_nudge(state: SarthiState) -> dict:
         
         responses = {
             "en": f"Hi! I noticed a {category} payment. Based on your pattern, {product_info['name']} could help. Rate: {product_info.get('rate', 'N/A')}%. Want details?",
-            "hi": f"Namaste! Maine {category} payment dekha. Aapke pattern ke hisaab se, {product_info['name']} madad kar sakta hai. Dar: {product_info.get('rate', 'N/A')}%. Jankari chahiye?",
-            "mr": f"Namaskar! Mi {category} payment lakshat ghetli. Tumchya pattern nusar, {product_info['name']} madat karu shakto. Dar: {product_info.get('rate', 'N/A')}%. Mahiti haviahe ka?"
+            "hi": f"नमस्ते! मैंने {category} पेमेंट देखा। आपके पैटर्न के हिसाब से, {product_info['name']} मदद कर सकता है। दर: {product_info.get('rate', 'N/A')}%। जानकारी चाहिए?",
+            "mr": f"नमस्कार! मी {category} पेमेंट पाहिले. तुमच्या पॅटर्ननुसार, {product_info['name']} मदत करू शकतो. दर: {product_info.get('rate', 'N/A')}%. माहिती हवी आहे का?"
         }
         
         create_audit_artifact(
@@ -209,8 +209,8 @@ def _default_adoption_response(state: SarthiState) -> dict:
     
     responses = {
         "en": "I can help you discover SBI products that match your needs. Are you looking for savings, loans, or insurance?",
-        "hi": "Main aapko SBI ke products ke baare mein bata sakta hoon jo aapki zarooraton se match karte hain. Bachat, loan, ya insurance?",
-        "mr": "Mi tumhala SBI che utpadane sanghu shakto je tumchya garajana saman ahet. Bachat, loan, kiva insurance?"
+        "hi": "मैं आपको SBI के उत्पादों के बारे में बता सकता हूँ जो आपकी ज़रूरतों से मैच करते हैं। बचत, लोन, या इंश्योरेंस?",
+        "mr": "मी तुम्हाला SBI ची उत्पादने सांगू शकतो जी तुमच्या गरजांशी जुळतात. बचत, लोन, किंवा इन्शुरन्स?"
     }
     
     return {

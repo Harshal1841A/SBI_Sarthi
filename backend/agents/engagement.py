@@ -43,8 +43,8 @@ def _handle_spending_alert(state: SarthiState) -> dict:
     
     responses = {
         "en": f"I noticed you're spending Rs. {overspend_amount:,} more than usual on {overspend_category}. Would you like me to suggest a budget adjustment?",
-        "hi": f"Maine dekha aap {overspend_category} par Rs. {overspend_amount:,} zyada kharch kar rahe hain. Kya main budget adjustment suggest karu?",
-        "mr": f"Mi lakshat ghetli ki tumhi {overspend_category} var Rs. {overspend_amount:,} jast kharch karat ahat. Mi budget adjustment suggest karu ka?"
+        "hi": f"मैंने देखा कि आप {overspend_category} पर Rs. {overspend_amount:,} ज़्यादा खर्च कर रहे हैं। क्या मैं बजट एडजस्टमेंट सजेस्ट करूँ?",
+        "mr": f"माझ्या लक्षात आले की तुम्ही {overspend_category} वर Rs. {overspend_amount:,} जास्त खर्च करत आहात. मी बजेट ऍडजस्टमेंट सजेस्ट करू का?"
     }
     
     return {
@@ -67,8 +67,8 @@ def _handle_churn_intervention(state: SarthiState) -> dict:
     
     responses = {
         "en": "I noticed you're considering leaving SBI. We value your relationship. Can I offer you a personalized retention plan? Perhaps a better FD rate or fee waiver?",
-        "hi": "Maine dekha aap SBI chhodne ka soch rahe hain. Hum aapke rishte ko kadar karte hain. Kya main aapke liye personalized retention plan la sakta hoon? Behtar FD rate ya fee waiver?",
-        "mr": "Mi lakshat ghetli ki tumhi SBI sodnyacha vichar karat ahat. Aamhi tumchya nateyala mahatva deto. Mi tumchya sathi personalized retention plan anu shakto ka? Changali FD rate kiva fee waiver?"
+        "hi": "मैंने देखा कि आप SBI छोड़ने का सोच रहे हैं। हम आपके रिश्ते की कदर करते हैं। क्या मैं आपके लिए पर्सनलाइज्ड रिटेंशन प्लान ला सकता हूँ? बेहतर FD रेट या फी वेवर?",
+        "mr": "माझ्या लक्षात आले की तुम्ही SBI सोडण्याचा विचार करत आहात. आम्ही तुमच्या नात्याला महत्त्व देतो. मी तुमच्यासाठी पर्सनलाइज्ड रिटेंशन प्लॅन आणू शकतो का? उत्तम FD रेट किंवा फी वेव्हर?"
     }
     
     return {
@@ -91,8 +91,8 @@ def _handle_dormant_reactivation(state: SarthiState) -> dict:
     
     responses = {
         "en": "Hello! This is Sarthi from SBI. Your account has been inactive for a while. I can help you reactivate it in 2 minutes. Would you like to proceed?",
-        "hi": "Namaste! Main SBI se Sarthi bol raha hoon. Aapka khata kuch samay se inactive hai. Main 2 minute mein ise activate kar sakta hoon. Kya aap aage badhna chahenge?",
-        "mr": "Namaskar! Mi SBI kadun Sarthi bolat ahe. Tumche khata kahi kalapasun active nahi. Mi 2 minitata te activate karu shakto. Tumhi pudhe jayla ichchita ka?"
+        "hi": "नमस्ते! मैं SBI से सारथी बोल रहा हूँ। आपका खाता कुछ समय से इनएक्टिव है। मैं 2 मिनट में इसे एक्टिवेट कर सकता हूँ। क्या आप आगे बढ़ना चाहेंगे?",
+        "mr": "नमस्कार! मी SBI कडून सारथी बोलत आहे. तुमचे खाते काही काळापासून इनऍक्टिव्ह आहे. मी २ मिनिटांत ते ऍक्टिव्हेट करू शकतो. तुम्हाला पुढे जायला आवडेल का?"
     }
     
     return {
@@ -127,8 +127,8 @@ def _handle_overdraft_prevention(state: SarthiState) -> dict:
     
     responses = {
         "en": f"Urgent: Your balance is Rs. {balance:,} but EMI of Rs. {scheduled_emi:,} is due tomorrow. You need Rs. {gap:,} more. Options: 1) Overdraft facility 2) EMI deferral 3) Emergency fund transfer. Which one?",
-        "hi": f"Tatkal: Aapka balance Rs. {balance:,} hai lekin kal Rs. {scheduled_emi:,} ka EMI jana hai. Aapko Rs. {gap:,} aur chahiye. Options: 1) Overdraft 2) EMI deferral 3) Emergency fund transfer. Konsa?",
-        "mr": f"Tatkali: Tumcha balance Rs. {balance:,} ahe pan udyacha Rs. {scheduled_emi:,} cha EMI ahe. Tumhala Rs. {gap:,} adhik lagle. Parayay: 1) Overdraft 2) EMI deferral 3) Emergency fund transfer. Konta?"
+        "hi": f"तत्काल: आपका बैलेंस Rs. {balance:,} है लेकिन कल Rs. {scheduled_emi:,} का EMI जाना है। आपको Rs. {gap:,} और चाहिए। ऑप्शंस: 1) ओवरड्राफ्ट 2) EMI डेफरल 3) इमरजेंसी फण्ड ट्रांसफर। कौन सा?",
+        "mr": f"तात्काळ: तुमचा बॅलन्स Rs. {balance:,} आहे पण उद्याचा Rs. {scheduled_emi:,} चा EMI आहे. तुम्हाला Rs. {gap:,} अधिक हवे आहेत. पर्याय: 1) ओवरड्राफ्ट 2) EMI डेफरल 3) इमरजेंसी फण्ड ट्रान्सफर. कोणता?"
     }
     
     return {
@@ -143,8 +143,8 @@ def _default_engagement_response(state: SarthiState) -> dict:
     
     responses = {
         "en": "I'm monitoring your financial wellness. Let me know if you'd like spending insights, budget tips, or help with any financial goals.",
-        "hi": "Main aapki financial wellness monitor kar raha hoon. Agar aapko spending insights, budget tips, ya financial goals mein madad chahiye, toh batayein.",
-        "mr": "Mi tumchi financial wellness monitor karat ahe. Jar tumhala spending insights, budget tips, kiva financial goals madhe madad pahije tar sanga."
+        "hi": "मैं आपकी फाइनेंशियल वेलनेस मॉनिटर कर रहा हूँ। अगर आपको स्पेंडिंग इनसाइट्स, बजट टिप्स, या फाइनेंशियल गोल्स में मदद चाहिए, तो बताएं।",
+        "mr": "मी तुमची फायनान्शियल वेलनेस मॉनिटर करत आहे. जर तुम्हाला स्पेंडिंग इनसाइट्स, बजेट टिप्स, किंवा फायनान्शियल गोल्समध्ये मदत हवी असेल तर सांगा."
     }
     
     return {

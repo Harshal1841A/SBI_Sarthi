@@ -164,47 +164,47 @@ _DEMO_SCRIPTS: list[tuple] = [
     (
         ["account", "khol", "open", "kholna", "खाता", "खोलो", "खोलना"],
         "account_opening",
-        "Namaste Rajesh ji! Aapka SBI Savings Account kholne ke liye, mujhe kuch details chahiye:\n1. Aadhar card number\n2. PAN card number\n3. Mobile number (OTP ke liye)\n\nAapka Aadhar number enter karein (last 4 digits)?",
+        "नमस्ते राजेश जी! आपका SBI सेविंग्स अकाउंट खोलने के लिए, मुझे कुछ डिटेल्स चाहिए:\n1. आधार कार्ड नंबर\n2. पैन कार्ड नंबर\n3. मोबाइल नंबर (OTP के लिए)\n\nअपना आधार नंबर दर्ज़ करें (अंतिम 4 अंक)?",
         "Welcome! To open your SBI Savings Account, I need:\n1. Aadhaar card number\n2. PAN card number\n3. Mobile number for OTP\n\nPlease enter your Aadhaar number (last 4 digits)?",
     ),
     (
         ["balance", "kitna", "check", "बैलेंस", "kitna hai", "balanc"],
         "balance_inquiry",
-        "Rajesh ji, aapka SBI account balance:\n\n💳 Account: SBI**********0123\n💰 Available Balance: ₹1,24,750.00\n📅 Last Transaction: ₹5,000 credited (salary) — aaj\n\nKuch aur help chahiye?",
+        "राजेश जी, आपका SBI अकाउंट बैलेंस:\n\n💳 अकाउंट: SBI**********0123\n💰 उपलब्ध बैलेंस: ₹1,24,750.00\n📅 अंतिम लेन-देन: ₹5,000 क्रेडिट (वेतन) — आज\n\nक्या मैं आपकी कुछ और मदद कर सकता हूँ?",
         "Your SBI account balance:\n\n💳 Account: SBI**********0123\n💰 Available Balance: ₹1,24,750.00\n📅 Last Transaction: ₹5,000 credited (salary) — today\n\nAnything else I can help you with?",
     ),
     (
         ["loan", "chahiye", "lena", "lakh", "emi", "लोन", "ऋण"],
         "loan_application",
-        "Rajesh ji, aapka loan request receive ho gaya! 🏦\n\n⚠️ Loan amount 50,000 se zyada hai — iska review SBI officer karega.\n\n📋 Details:\n- Requested Amount: ₹5,00,000\n- Interest Rate: 8.5% p.a. (current)\n- Processing Fee: ₹2,500\n- Status: HITL Queue mein — supervisor approval pending\n\nEk officer 24 hours mein contact karega. Reference ID: LOAN_DEMO_001",
+        "राजेश जी, आपकी लोन रिक्वेस्ट प्राप्त हो गई है! 🏦\n\n⚠️ लोन की राशि 50,000 से अधिक है — इसकी समीक्षा SBI अधिकारी करेंगे।\n\n📋 विवरण:\n- अनुरोधित राशि: ₹5,00,000\n- ब्याज दर: 8.5% p.a. (वर्तमान)\n- प्रोसेसिंग फीस: ₹2,500\n- स्थिति: HITL कतार में — सुपरवाइज़र की मंजूरी लंबित\n\nएक अधिकारी 24 घंटे के भीतर आपसे संपर्क करेगा। संदर्भ आईडी: LOAN_DEMO_001",
         "Your loan request has been received! 🏦\n\n⚠️ Loan amount exceeds ₹50,000 — flagged for SBI officer review.\n\n📋 Details:\n- Requested Amount: ₹5,00,000\n- Interest Rate: 8.5% p.a. (current)\n- Processing Fee: ₹2,500\n- Status: Pending supervisor approval (HITL)\n\nAn officer will contact you within 24 hours. Reference ID: LOAN_DEMO_001",
     ),
     (
         ["card", "block", "band", "karo", "stop", "cardblock", "ब्लॉक"],
         "card_block",
-        "Rajesh ji, aapka debit card TURANT block kar diya gaya! 🔒\n\n✅ Card **** **** **** 5678 block ho gaya\n📱 SMS confirmation: +91-98765-43210 pe bheja gaya\n📞 Nayi card ke liye: 1800-11-2211 pe call karein\n\nKya aapko replacement card chahiye?",
+        "राजेश जी, आपका डेबिट कार्ड तुरंत ब्लॉक कर दिया गया है! 🔒\n\n✅ कार्ड **** **** **** 5678 ब्लॉक हो गया है\n📱 SMS पुष्टि: +91-98765-43210 पर भेजी गई\n📞 नए कार्ड के लिए: 1800-11-2211 पर कॉल करें\n\nक्या आपको रिप्लेसमेंट कार्ड चाहिए?",
         "Your debit card has been blocked immediately! 🔒\n\n✅ Card **** **** **** 5678 blocked successfully\n📱 SMS confirmation sent to +91-98765-43210\n📞 For replacement: Call 1800-11-2211\n\nWould you like to request a replacement card?",
     ),
     (
         ["transfer", "send", "bhejo", "paisa", "money", "upi", "neft", "imps"],
         "fund_transfer",
-        "Fund transfer ke liye:\n\n1️⃣ Beneficiary ka account number enter karein\n2️⃣ IFSC code\n3️⃣ Amount (max ₹2,00,000 per day)\n4️⃣ OTP verify karein\n\n⚡ IMPS (Instant) ya NEFT (2 hours) - aapki choice?\n\nNote: Demo mode mein actual transfer nahi hoga.",
+        "फंड ट्रांसफर के लिए:\n\n1️⃣ लाभार्थी का अकाउंट नंबर दर्ज करें\n2️⃣ IFSC कोड\n3️⃣ राशि (अधिकतम ₹2,00,000 प्रति दिन)\n4️⃣ OTP सत्यापित करें\n\n⚡ IMPS (तुरंत) या NEFT (2 घंटे) - आपकी पसंद?\n\nनोट: डेमो मोड में वास्तविक ट्रांसफर नहीं होगा।",
         "For fund transfer:\n\n1️⃣ Enter beneficiary account number\n2️⃣ IFSC code\n3️⃣ Amount (max ₹2,00,000 per day)\n4️⃣ Verify OTP\n\n⚡ IMPS (Instant) or NEFT (2 hours) - your choice?\n\nNote: No actual transfer in demo mode.",
     ),
     (
         ["kyc", "document", "update", "verify", "aadhaar", "aadhar", "आधार", "pan"],
         "kyc_update",
-        "KYC update process:\n\n📄 Required documents:\n1. Aadhaar Card (front + back)\n2. PAN Card\n3. Recent photo\n\n🤖 AI-powered document verification (< 30 sec)\n✅ Auto-fill from QR code\n\nAbhi upload karein ya branch visit karein? SBI branches SBI.co.in pe milenge.",
+        "KYC अपडेट प्रक्रिया:\n\n📄 आवश्यक दस्तावेज़:\n1. आधार कार्ड (आगे + पीछे)\n2. पैन कार्ड\n3. हाल की फोटो\n\n🤖 AI-संचालित दस्तावेज़ सत्यापन (< 30 सेकंड)\n✅ QR कोड से ऑटो-फिल\n\nअभी अपलोड करें या शाखा में जाएँ? SBI शाखाएं SBI.co.in पर मिलेंगी।",
         "KYC update process:\n\n📄 Required documents:\n1. Aadhaar Card (front + back)\n2. PAN Card\n3. Recent photo\n\n🤖 AI-powered verification (< 30 sec)\n✅ Auto-fill from QR code\n\nUpload now or visit branch? Find SBI branches at SBI.co.in",
     ),
 ]
 
 _DEMO_DEFAULT_HI = (
-    "Namaste! Main Sarthi hoon, aapka SBI AI banking saathi. 🏦\n\n"
-    "Main inke baare mein help kar sakta hoon:\n"
-    "• 💰 Balance check\n• 🏦 Account opening\n• 💳 Card block\n"
-    "• 🏛️ Loan application\n• 💸 Fund transfer\n• 📄 KYC update\n\n"
-    "Kya chahiye aapko?"
+    "नमस्ते! मैं सारथी हूँ, आपका SBI AI बैंकिंग साथी। 🏦\n\n"
+    "मैं इनमें आपकी मदद कर सकता हूँ:\n"
+    "• 💰 बैलेंस चेक\n• 🏦 अकाउंट खोलना\n• 💳 कार्ड ब्लॉक\n"
+    "• 🏛️ लोन एप्लीकेशन\n• 💸 फंड ट्रांसफर\n• 📄 KYC अपडेट\n\n"
+    "आपको क्या चाहिए?"
 )
 _DEMO_DEFAULT_EN = (
     "Namaste! I am Sarthi, your SBI AI banking assistant. 🏦\n\n"

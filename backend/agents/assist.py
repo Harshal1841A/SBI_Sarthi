@@ -57,7 +57,7 @@ def _handle_balance_inquiry(state: SarthiState) -> dict:
         "en": f"Your savings account balance is Rs. {user_balance.get('savings', 0):,}. Current account: Rs. {user_balance.get('current', 0):,}.",
         "hi": f"आपका बचत खाता बैलेंस रु. {user_balance.get('savings', 0):,} है। करंट अकाउंट: रु. {user_balance.get('current', 0):,}।",
         "mr": f"तुमचा बचत खाता बॅलन्स रु. {user_balance.get('savings', 0):,} आहे. चालू खाते: रु. {user_balance.get('current', 0):,}.",
-        "hi-en": f"Aapka savings balance Rs. {user_balance.get('savings', 0):,} hai. Current account mein Rs. {user_balance.get('current', 0):,} hai."
+        "hi-en": f"आपका बचत खाता बैलेंस रु. {user_balance.get('savings', 0):,} है। करंट अकाउंट: रु. {user_balance.get('current', 0):,}।"
     }
     
     return {
@@ -195,7 +195,7 @@ def _handle_general_chat(state: SarthiState) -> dict:
             "en": "Namaste! I am Sarthi, your SBI digital banking assistant. How can I help you today?",
             "hi": "नमस्ते! मैं सारथी हूँ, आपका SBI डिजिटल बैंकिंग साथी। आज मैं आपकी क्या मदद कर सकता हूँ?",
             "mr": "नमस्कार! मी सारथी आहे, तुमचा SBI डिजिटल बँकिंग साथी. आज मी तुमची काय मदत करू शकतो?",
-            "hi-en": "Namaste! I'm Sarthi, your SBI digital buddy. Aaj kya help chahiye?"
+            "hi-en": "नमस्ते! मैं सारथी हूँ, आपका SBI डिजिटल बैंकिंग साथी। आज मैं आपकी क्या मदद कर सकता हूँ?"
         }
         return {
             "response_text": responses.get(lang, responses["en"]),

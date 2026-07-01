@@ -114,8 +114,8 @@ def _get_compensation_message(state: SarthiState) -> str:
     
     responses = {
         "en": "We apologize, but there was a technical issue with your account setup. Your data is secure and any deposited amount will be refunded within 24 hours. Would you like to try again?",
-        "hi": "Kshama kijiye, aapke account setup mein technical samasya aayi hai. Aapka data surakshit hai aur koi bhi jama rakam 24 ghante mein wapas ho jayegi. Kya aap dubara prayas karna chahenge?",
-        "mr": "Kshama kara, tumchya account setup madhye technical samasya ali. Tumcha data surakshit ahe ani koni jama rakam 24 tasat parat milen. Tumhi parat prayatna karu ichchita ka?"
+        "hi": "क्षमा कीजिए, आपके अकाउंट सेटअप में तकनीकी समस्या आई है। आपका डेटा सुरक्षित है और कोई भी जमा रकम 24 घंटे में वापस हो जाएगी। क्या आप दोबारा प्रयास करना चाहेंगे?",
+        "mr": "क्षमा करा, तुमच्या अकाउंट सेटअपमध्ये तांत्रिक समस्या आली आहे. तुमचा डेटा सुरक्षित आहे आणि कोणतीही जमा रक्कम २४ तासात परत मिळेल. तुम्ही पुन्हा प्रयत्न करू इच्छिता का?"
     }
     
     return responses.get(lang, responses["en"])
